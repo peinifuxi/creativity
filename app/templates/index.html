@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>标注页面</title>
+</head>
+<body>
+
+    
+    <!-- 导航 -->
+    <a href="/">首页</a> | 
+    <a href="/annotate">标注页面</a> | 
+    <a href="/statistic">统计页面</a>| 
+    <a href="/manage">管理页面</a> 
+    <h1>上传裁判文书</h1>
+    
+    <form action="/casesubmit" method="POST">
+        案例名称：<input type="text" name="name"><br>
+        案例类型：
+    <select name="sort">
+        <option value="">请选择类型</option>
+        <option value="刑事">刑事</option>
+        <option value="民事">民事</option>
+        <option value="行政">行政</option>
+        <option value="其他">其他</option>
+    </select><br><br>
+        内容：<textarea name="content"></textarea><br>
+        <input type="submit" value="提交">
+    </form>
+    
+</body>
+</html>

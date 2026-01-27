@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <!-- 导航 -->
+    <a href="/">首页</a> | 
+    <a href="/annotate">标注页面</a> | 
+    <a href="/statistic">统计页面</a>| 
+    <a href="/manage">管理页面</a>
+
+    <h1>案例管理</h1>
+    
+    <table border="1">
+        <tr>
+            <th>案例名称</th>
+            <th>案例类型</th>
+            <th>操作</th>
+        </tr>
+        {% for case in cases %}
+        <tr>
+            <td>{{ case.name }}</td>
+            <td>{{ case.sort }}</td>
+            <td>
+                <a href="/annotate?case_id={{ case.id }}">查看</a>
+                |
+                <form action="/delete/{{ case.id }}" method="POST" style="display: inline;">
+                    <button type="submit" onclick="return confirm('确定删除【{{ case.name }}】吗？')" 
+                             background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0;">
+                        删除
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    
+    <p>共 {{ cases|length }} 条记录</p>
+</body>
+</html>
