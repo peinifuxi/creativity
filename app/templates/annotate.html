@@ -60,7 +60,7 @@
             </table>
             
             <hr>
-            <p><a href="/submit">提交新案件</a> | <a href="/manage">查看所有案件</a></p>
+            <p><a href="/">提交新案件</a> | <a href="/manage">查看所有案件</a></p>
         {% endif %}
     {% endif %}
 
@@ -77,6 +77,48 @@
                 button.textContent = '点击展开完整内容';
             }
         }
+        
     </script>
 </body>
 </html>
+<style>
+    body {
+        background-color: #f0f8ff; /* 浅蓝色背景 */
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        line-height: 1.6;
+    }
+    
+    h1, h2, h3 {
+        color: #2c5282; /* 深蓝色标题 */
+    }
+    
+    hr {
+        border: none;
+        height: 1px;
+        background-color: #a0c8f8; /* 浅蓝色分割线 */
+        margin: 20px 0;
+    }
+    
+    a {
+        color: #3182ce; /* 蓝色链接 */
+        text-decoration: none;
+    }
+    
+    a:hover {
+        text-decoration: underline;
+    }
+    
+    button {
+        background-color: #4299e1; /* 蓝色按钮 */
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    button:hover {
+        background-color: #3182ce;
+    }
+</style>

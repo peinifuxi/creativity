@@ -17,10 +17,10 @@
         案例名称：<input type="text" name="name"><br>
         案例类型：
     <select name="sort">
-        <option value="">请选择类型</option>
-        <option value="刑事">刑事</option>
-        <option value="民事">民事</option>
-        <option value="行政">行政</option>
+        <option value="">请选择案件类型</option>
+        <option value="刑事">刑事案件</option>
+        <option value="民事">民事案件</option>
+        <option value="行政">行政案件</option>
         <option value="其他">其他</option>
     </select><br><br>
         内容：<textarea name="content"></textarea><br>
@@ -29,3 +29,60 @@
     
 </body>
 </html>
+<style>
+    body {
+        background-color: #f0f8ff;
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        line-height: 1.6;
+    }
+    
+    h1 {
+        color: #2c5282;
+    }
+    
+    form {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #a0c8f8;
+        max-width: 600px;
+    }
+    
+    input[type="text"], textarea, select {
+        width: 100%;
+        padding: 8px;
+        margin: 8px 0 16px 0;
+        border: 1px solid #a0c8f8;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    
+    textarea {
+        height: 200px;
+        resize: vertical;
+    }
+    
+    input[type="submit"] {
+        background-color: #4299e1;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    
+    input[type="submit"]:hover {
+        background-color: #3182ce;
+    }
+    
+    a {
+        color: #3182ce;
+        text-decoration: none;
+    }
+    
+    a:hover {
+        text-decoration: underline;
+    }
+</style>
