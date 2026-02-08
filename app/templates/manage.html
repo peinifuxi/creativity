@@ -9,6 +9,44 @@
 
     <h1>案例管理</h1>
     
+    <!-- 新增：搜索表单 -->
+    <div style="margin: 20px 0; padding: 15px; background-color: white; border: 1px solid #a0c8f8; border-radius: 5px;">
+        <form method="GET" action="/manage" style="display: flex; gap: 10px; align-items: center;">
+            <input type="text" 
+                   name="keyword" 
+                   placeholder="输入关键词搜索..." 
+                   style="flex: 1; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;"
+                   value="{{ keyword or '' }}">
+            
+            <select name="sort" style="padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                <option value="">全部分类</option>
+                {% for sort in all_sorts %}
+                    <option value="{{ sort }}" {% if selected_sort == sort %}selected{% endif %}>
+                        {{ sort }}
+                    </option>
+                {% endfor %}
+            </select>
+            
+            <button type="submit" 
+                    style="padding: 8px 16px; background-color: #3182ce; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                搜索
+            </button>
+            <a href="/manage" 
+               style="padding: 8px 16px; background-color: #e2e8f0; color: #4a5568; border-radius: 4px; text-decoration: none;">
+                重置
+            </a>
+        </form>
+        
+        <!-- 新增：搜索统计 -->
+        {% if keyword or selected_sort %}
+        <div style="margin-top: 10px; color: #2c5282; font-size: 14px;">
+            搜索到 {{ filtered_count }} 条结果
+            {% if keyword %}| 关键词：<strong>"{{ keyword }}"</strong>{% endif %}
+            {% if selected_sort %}| 分类：<strong>{{ selected_sort }}</strong>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    
     <table border="1">
         <tr>
             <th>案例名称</th>
@@ -17,7 +55,12 @@
         </tr>
         {% for case in cases %}
         <tr>
-            <td>{{ case.name }}</td>
+            <td>
+                {{ case.name }}
+                {% if keyword and keyword in case.name %}
+                <span style="color: #e53e3e; font-size: 12px; margin-left: 5px;">✓</span>
+                {% endif %}
+            </td>
             <td>{{ case.sort }}</td>
             <td>
                 <a href="/annotate?case_id={{ case.id }}">查看</a>
@@ -33,7 +76,7 @@
         {% endfor %}
     </table>
     
-    <p>共 {{ cases|length }} 条记录</p>
+    <p>共 {{ filtered_count }} 条记录（总计：{{ total_count }} 条）</p>
 </body>
 </html>
 <style>
@@ -94,5 +137,15 @@
     
     button:hover {
         background-color: #e53e3e;
+    }
+    
+    /* 新增：搜索按钮样式 */
+    input[type="text"], select {
+        font-size: 14px;
+    }
+    
+    input[type="text"]:focus, select:focus {
+        outline: none;
+        border-color: #3182ce;
     }
 </style>

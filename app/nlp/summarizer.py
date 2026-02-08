@@ -31,7 +31,7 @@ class LegalSummarizer:
         sentences = re.split(r'[。！？；]', text)
         return [s.strip() for s in sentences if len(s.strip()) > 10]
     
-    def extract_summary(self, text: str, num_sentences: int = 5) -> Dict:
+    def extract_summary(self, text: str, num_sentences: int = 10) -> Dict:
         """提取摘要"""
         text = self._clean_text(text)
         if len(text) < 100:

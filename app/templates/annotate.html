@@ -43,7 +43,14 @@
                     <!-- 右栏：摘要和原文 -->
                     <td width="70%" valign="top">
                         <h3>文书摘要</h3>
-                        <div>{{ case.summary if case.summary else case.content[:200] + '...' }}</div>
+                        <div>
+                            {% if case.summary %}
+                                <!-- 渲染已高亮的HTML -->
+                                {{ highlighted_summary|safe }}
+                            {% else %}
+                                {{ case.content[:200] + '...' }}
+                            {% endif %}
+                        </div>
                         
                         <hr>
                         

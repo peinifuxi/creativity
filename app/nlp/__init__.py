@@ -19,7 +19,7 @@ class LegalDocumentAnalyzer:
             return None
         
         # 提取摘要
-        summary_result = self.summarizer.extract_summary(text)
+        summary_result = self.summarizer.extract_summary(text, num_sentences=10)
         
         # 提取关键词
         keyword_result = self.keyword_extractor.extract_keywords(text)
