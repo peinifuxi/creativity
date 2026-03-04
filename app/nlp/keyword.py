@@ -1,6 +1,9 @@
 import jieba
 import jieba.analyse
+import logging
 from typing import List, Dict
+
+jieba.setLogLevel(logging.INFO)
 
 class LegalKeywordExtractor:
     """法律关键词提取器"""

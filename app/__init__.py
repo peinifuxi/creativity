@@ -5,6 +5,7 @@ from .annotate import annotate_bp
 from .statistic import statistic_bp
 from .nlp_analyse import nlp_bp
 from .database import db, init_data
+from flask_migrate import Migrate
 
 
 

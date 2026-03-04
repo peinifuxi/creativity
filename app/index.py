@@ -3,6 +3,7 @@ from .database import Case, db
 from datetime import datetime
 import json
 from .nlp import analyzer  # 导入NLP分析器
+import traceback
 
 index_bp = Blueprint('index', __name__)
 
@@ -10,59 +11,67 @@ index_bp = Blueprint('index', __name__)
 def index():
     return render_template('index.html')
 
-@index_bp.route('/submit')
-def submit_form():
-    """显示提交表单"""
-    return render_template('submit.html')
 
 @index_bp.route('/casesubmit', methods=['POST'])
 def case_submit():
     """处理案件提交 - 提交后跳转到标注页面显示该案件"""
     try:
-        name = request.form.get('name')
-        sort = request.form.get('sort')
-        cause = request.form.get('cause')
-        result = request.form.get('result')
+        # 获取内容
         content = request.form.get('content')
         
-        # 1. 先保存基本案件信息
-        new_case = Case(name=name, sort=sort, cause=cause, result=result, content=content)
+        if not content:
+            return "内容不能为空", 400
+        
+        # 提取标题
+        first_line = content.strip().split('\n')[0]
+        if '案  由' in first_line:
+            title = first_line.split('案  由')[0].strip()
+            # 用"案  由"分割内容，取后面的部分作为实际内容
+            content_parts = content.split('案  由')
+            if len(content_parts) > 1:
+                content_without_title = content_parts[1].strip()
+            else:
+                content_without_title = content
+        else:
+            title = first_line[:100] + "..." if len(first_line) > 100 else first_line
+            # 去掉第一行
+            content_lines = content.strip().split('\n')
+            content_without_title = '\n'.join(content_lines[1:]).strip() if len(content_lines) > 1 else content
+        
+        # 确定案件类型
+        if '刑事' in title:
+            sort = '刑事案件'
+        elif '民事' in title:
+            sort = '民事案件'
+        elif '行政' in title:
+            sort = '行政案件'
+        else:
+            sort = '其他'
+        
+        # 保存案件
+        new_case = Case(name=title, sort=sort, content=content_without_title)
         db.session.add(new_case)
-        db.session.commit()  # 先提交获取ID
+        db.session.commit()
         
-        # 2. 进行NLP分析（如果内容足够长）
-        if content and len(content.strip()) > 50:
-            # 准备案件信息用于增强关键词
-            case_info = {
-                'sort': sort,
-                'cause': cause,
-                'result': result
-            }
-            
-            # 调用NLP分析
-            analysis_result = analyzer.analyze(content, case_info)
-            
-            if analysis_result:
-                # 更新案件的分析结果
-                new_case.summary = analysis_result['summary']
-                # 只保存关键词列表，不保存分类结构（简化）
-                new_case.keywords = json.dumps(
-                    [kw['word'] for kw in analysis_result['keywords']['all'][:20]], 
-                    ensure_ascii=False
-                )
-                new_case.is_nlp_analyzed = True
-                new_case.analyzed_at = datetime.now()
-                
-                db.session.commit()
+        # NLP分析
+        if content_without_title and len(content_without_title.strip()) > 50:
+            try:
+                analysis_result = analyzer.analyze(content_without_title, {'sort': sort})
+                if analysis_result:
+                    new_case.summary = analysis_result['summary']
+                    new_case.keywords = json.dumps(
+                        [kw['word'] for kw in analysis_result['keywords']['all'][:20]], 
+                        ensure_ascii=False
+                    )
+                    new_case.is_nlp_analyzed = True
+                    new_case.analyzed_at = datetime.now()
+                    db.session.commit()
+            except:
+                db.session.rollback()
+                new_case = Case.query.get(new_case.id)
         
-        # 3. 跳转到标注页面
         return redirect(f'/annotate?case_id={new_case.id}')
         
     except Exception as e:
-        # 如果出错，至少保证案件保存成功
         db.session.rollback()
-        # 重新保存基本案件信息
-        new_case = Case(name=name, sort=sort, cause=cause, result=result, content=content)
-        db.session.add(new_case)
-        db.session.commit()
-        return redirect(f'/annotate?case_id={new_case.id}')
+        return f"提交失败: {str(e)}", 500

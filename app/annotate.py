@@ -3,22 +3,7 @@ from .database import Case, db
 
 annotate_bp = Blueprint('annotate', __name__)
 
-def highlight_keywords_red(text, keywords):
-    """高亮关键词为红色"""
-    if not text or not keywords:
-        return text
-    
-    highlighted = text
-    # 去重并排序，先处理长词避免嵌套问题
-    unique_keywords = list(set([str(k).strip() for k in keywords]))
-    sorted_keywords = sorted(unique_keywords, key=len, reverse=True)
-    
-    for keyword in sorted_keywords:
-        if len(keyword) > 1 and keyword in highlighted:
-            highlighted_word = f'<span style="color: blue; font-weight: bold;">{keyword}</span>'
-            highlighted = highlighted.replace(keyword, highlighted_word)
-    
-    return highlighted
+
 
 @annotate_bp.route('/annotate')
 def annotate():
@@ -44,12 +29,12 @@ def annotate():
     if case:
         # 记录当前查看的案件到session
         session['last_viewed_case'] = case.id
-        # 增加浏览量
+        
         case.browses += 1
         db.session.commit()
         
         # 处理摘要高亮
-        highlighted_summary = highlight_keywords_red(
+        highlighted_summary = highlight_keywords(
             case.summary if case.summary else "",
             case.get_keywords_list()
         )
@@ -60,3 +45,21 @@ def annotate():
                              mode='view')
     
     return render_template('annotate.html', case=None, mode='prompt')
+
+
+def highlight_keywords(text, keywords):
+    """高亮关键词"""
+    if not text or not keywords:
+        return text
+    
+    highlighted = text
+    # 去重并排序，先处理长词避免嵌套问题
+    unique_keywords = list(set([str(k).strip() for k in keywords]))
+    sorted_keywords = sorted(unique_keywords, key=len, reverse=True)
+    
+    for keyword in sorted_keywords:
+        if len(keyword) > 1 and keyword in highlighted:
+            highlighted_word = f'<span style="color: blue; font-weight: bold;">{keyword}</span>'
+            highlighted = highlighted.replace(keyword, highlighted_word)
+    
+    return highlighted

@@ -7,7 +7,7 @@ db = SQLAlchemy()
 class Case(db.Model):
     __tablename__ = 'cases'
     
-    # 原有字段保持不变
+    
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False, unique=True)
     time = db.Column(db.Date, default=date.today) 
@@ -22,6 +22,12 @@ class Case(db.Model):
     keywords = db.Column(db.Text, default='[]')  # 关键词列表（JSON格式）
     is_nlp_analyzed = db.Column(db.Boolean, default=False)  # 是否已分析
     analyzed_at = db.Column(db.DateTime)  # 分析时间
+
+
+     # 添加索引
+    __table_args__ = (
+        db.Index('idx_case_sort', sort),              # 分类筛选
+    )
     
     def get_keywords_list(self):
         """获取关键词列表"""
