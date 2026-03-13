@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, session
 from .database import Case, db
 
+import json
+
 annotate_bp = Blueprint('annotate', __name__)
 
 
@@ -10,33 +12,37 @@ def annotate():
     """标注页面"""
     case = None
     
-    # 优先从URL参数获取
+    # 1.优先从URL参数获取
     case_id = request.args.get('case_id', type=int)
     if case_id:
         case = Case.query.get(case_id)
     
-    # 其次从session获取上次查看的
+    # 2.其次从session获取上次查看的
     if not case:
         last_case_id = session.get('last_viewed_case')
         if last_case_id:
             case = Case.query.get(last_case_id)
     
-    # 最后获取最近的
+    # 3.最后获取最近的
     if not case:
         case = Case.query.order_by(Case.time.desc()).first()
     
-    # 显示案件或提示
+    # 4. 最终找到的case
     if case:
-        # 记录当前查看的案件到session
         session['last_viewed_case'] = case.id
-        
-        case.browses += 1
         db.session.commit()
         
-        # 处理摘要高亮
+        
+        keywords_list = []
+        if case.keywords:
+            try:
+                keywords_list = json.loads(case.keywords)
+            except:
+                keywords_list = []
+        
         highlighted_summary = highlight_keywords(
             case.summary if case.summary else "",
-            case.get_keywords_list()
+            keywords_list  
         )
         
         return render_template('annotate.html', 
@@ -47,13 +53,13 @@ def annotate():
     return render_template('annotate.html', case=None, mode='prompt')
 
 
+
 def highlight_keywords(text, keywords):
     """高亮关键词"""
     if not text or not keywords:
         return text
     
     highlighted = text
-    # 去重并排序，先处理长词避免嵌套问题
     unique_keywords = list(set([str(k).strip() for k in keywords]))
     sorted_keywords = sorted(unique_keywords, key=len, reverse=True)
     

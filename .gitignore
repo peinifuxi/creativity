@@ -1,0 +1,16 @@
+# 环境变量文件
+.env
+.env.*
+!.env.example
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/

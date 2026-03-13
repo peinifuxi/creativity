@@ -3,30 +3,33 @@ from .index import index_bp
 from .manage import manage_bp
 from .annotate import annotate_bp
 from .statistic import statistic_bp
-from .nlp_analyse import nlp_bp
-from .database import db, init_data
-from flask_migrate import Migrate
+from .predict import predict_bp
+from .database import db
+import pymysql
+import sys
+import os
 
+# 只添加这两行
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from settings import settings
 
+pymysql.install_as_MySQLdb()
 
 def create_app():
     app = Flask(__name__)
 
-    app.secret_key = 'prefixkid'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
+    app.config['SQLALCHEMY_DATABASE_URI'] = settings.SQLALCHEMY_DATABASE_URI  
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ECHO'] = False  
+    app.config['SECRET_KEY'] = settings.SECRET_KEY  
     
-    with app.app_context():
-        db.init_app(app)
-        db.create_all()
-        # init_data()
+    db.init_app(app)
     
-    # 注册所有蓝图
     app.register_blueprint(index_bp)
     app.register_blueprint(manage_bp)
     app.register_blueprint(annotate_bp)
     app.register_blueprint(statistic_bp)
-    app.register_blueprint(nlp_bp)  # 新增注册NLP蓝图
-    app.run(debug=True)
+    app.register_blueprint(predict_bp)  
+    
+    
     return app
-

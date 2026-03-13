@@ -9,13 +9,16 @@
     <a href="/">首页</a> | 
     <a href="/annotate">标注页面</a> | 
     <a href="/statistic">统计页面</a>| 
+    <a href="/predict">判决预测页面</a> |  
     <a href="/manage">管理页面</a> 
     <h1>上传裁判文书</h1>
     
     <form action="/casesubmit" method="POST">
-        内容：<textarea name="content" placeholder="请粘贴裁判文书内容..."></textarea><br>
-        <input type="submit" value="提交">
-    </form>
+    
+    内容：<textarea name="content" placeholder="请粘贴裁判文书内容..."></textarea><br>
+    判决结果：<input type="text" name="result" placeholder="请输入判决结果" class="result-input"><br>
+    <input type="submit" value="提交">
+</form>
     
 </body>
 </html>
@@ -48,6 +51,15 @@
         box-sizing: border-box;
         height: 300px;
         resize: vertical;
+    }
+    
+    .result-input {
+        width: 100%;
+        padding: 8px;
+        margin: 8px 0 16px 0;
+        border: 1px solid #a0c8f8;
+        border-radius: 4px;
+        box-sizing: border-box;
     }
     
     input[type="submit"] {

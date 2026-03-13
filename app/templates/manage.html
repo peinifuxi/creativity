@@ -8,12 +8,13 @@
 </head>
 <body>
     <!-- 导航 -->
-    <div class="nav">
+   
         <a href="/">首页</a> | 
         <a href="/annotate">标注页面</a> | 
         <a href="/statistic">统计页面</a> | 
+        <a href="/predict">判决预测页面</a> |  
         <a href="/manage">管理页面</a>
-    </div>
+    
 
     <h1>案例管理</h1>
     
@@ -51,6 +52,7 @@
             {% if selected_sort %}| 分类：<strong>{{ selected_sort }}</strong>{% endif %}
         </div>
         {% endif %}
+        <div style="margin-top: 10px; color: #2c5282; font-size: 14px;">[共 {{ total_count }} 个案件]</div>
     </div>
     
     <!-- 数据表格 -->
@@ -91,7 +93,7 @@
             {% if pagination.pages > 1 %}
                 第 {{ pagination.page }} / {{ pagination.pages }} 页
             {% endif %}
-            （共 {{ filtered_count }} 条记录）
+            
         </div>
         
         {% if pagination.pages > 1 %}

@@ -8,6 +8,7 @@
     <a href="/">首页</a> | 
     <a href="/annotate">标注页面</a> | 
     <a href="/statistic">统计页面</a> | 
+    <a href="/predict">判决预测页面</a> |  
     <a href="/manage">管理页面</a> 
     
     <h1>案例标注系统</h1>
@@ -30,14 +31,13 @@
                     <td width="30%" valign="top">
                         
                         <h3>自动提取的关键词</h3>
-                    {% if case.get_keywords_list() %}
-                    {% for keyword in case.get_keywords_list()[:15] %}
-                     <!-- 直接显示，不使用 .word -->
-                     <div>{{ keyword }}</div>
-                     {% endfor %}
+                        {% if case.get_keywords_list() %}
+                            {% for keyword in case.get_keywords_list() %}
+                                <span class="keyword-tag">{{ keyword }}</span>
+                            {% endfor %}
                         {% else %}
-                 <p>无关键词</p>
-                    {% endif %}
+                            <p>无关键词</p>
+                        {% endif %}
                     </td>
                     
                     <!-- 右栏：摘要和原文 -->
@@ -163,5 +163,16 @@
     
     button:hover {
         background-color: #3182ce;
+    }
+
+    .keyword-tag {
+        display: inline-block;
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        padding: 4px 12px;
+        margin: 4px;
+        border-radius: 16px;
+        font-size: 14px;
+        border: 1px solid #90caf9;
     }
 </style>

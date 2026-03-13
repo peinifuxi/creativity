@@ -9,36 +9,13 @@
     <!-- 导航 -->
     <a href="/">首页</a> | 
     <a href="/annotate">标注页面</a> | 
-    <a href="/statistic">统计页面</a> | 
+    <a href="/statistic">统计页面</a> |
     <a href="/predict">判决预测页面</a> |  
     <a href="/manage">管理页面</a> 
 
-    <h1>统计页面</h1>
+    <h1>判决预测页面</h1>
     
-    <!-- 只显示第一个案件（当前查看的） -->
-    {% if cases %}
-        <div style="margin-bottom: 20px; border: 1px solid #ccc; padding: 10px;">
-            <h3>{{ cases[0].name }} ({{ cases[0].sort }})</h3>
-            
-            {% if cases[0].is_nlp_analyzed and cases[0].get_keywords_list() %}
-                <p><strong>关键词:</strong>
-                    {% for keyword in cases[0].get_keywords_list() %}
-                        <span style="background: #f0f0f0; padding: 3px 6px; margin: 2px;">
-                            {% if keyword is mapping %}
-                                {{ keyword.word }}
-                            {% else %}
-                                {{ keyword }}
-                            {% endif %}
-                        </span>
-                    {% endfor %}
-                </p>
-            {% else %}
-                <p>未分析或关键词为空</p>
-            {% endif %}
-        </div>
-    {% else %}
-        <p>还没有案件数据</p>
-    {% endif %}
+  
 </body>
 </html>
 <style>
