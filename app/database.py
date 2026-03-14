@@ -15,15 +15,16 @@ class Case(db.Model):
     
     content = db.Column(db.Text, default='') 
     
-    
-    law = db.Column(db.String(100), default='')
+    court = db.Column(db.String(50), default='')
+    law = db.Column(db.Text, default='[]')            
+
     summary = db.Column(db.Text, default='')  
     keywords = db.Column(db.Text, default='[]')
 
 
-    person = db.Column(db.String(100), default='')
-    incident = db.Column(db.String(200), default='')
-    location = db.Column(db.String(100), default='')
+    person = db.Column(db.Text, default='[]')        
+    incident = db.Column(db.Text, default='')         
+    location = db.Column(db.String(200), default='')  
 
     result = db.Column(db.Text,default='')
     predict_result = db.Column(db.Text,default='')

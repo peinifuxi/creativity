@@ -28,17 +28,56 @@
             <table border="0" width="100%">
                 <tr>
                     <!-- 左栏：基本信息和关键词 -->
-                    <td width="30%" valign="top">
-                        
-                        <h3>自动提取的关键词</h3>
-                        {% if case.get_keywords_list() %}
-                            {% for keyword in case.get_keywords_list() %}
-                                <span class="keyword-tag">{{ keyword }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <p>无关键词</p>
-                        {% endif %}
-                    </td>
+<td width="30%" valign="top">
+    
+    <h3>关键词</h3>
+    {% if case.get_keywords_list() %}
+        {% for keyword in case.get_keywords_list() %}
+            <span >{{ keyword }}</span>
+        {% endfor %}
+    {% else %}
+        <p>无关键词</p>
+    {% endif %}
+    
+    <!-- 新增字段显示区域 -->
+    <hr>
+    
+    <h3>审理法院</h3>
+    <p>{{ case.court or '暂无' }}</p>
+    
+    <h3>相关法律</h3>
+{% if laws_list %}
+    <ul>
+    {% for law in laws_list %}
+        <li>{{ law }}</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>暂无</p>
+{% endif %}
+
+<!-- 涉案人员部分 -->
+<h3>涉案人员</h3>
+{% if persons_list %}
+    <ul>
+    {% for person in persons_list %}
+        <li>
+            {% if person.role %}{{ person.role }}：{% endif %}
+            {{ person.name }}
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>暂无</p>
+{% endif %}
+    
+    <h3>纠纷描述</h3>
+    <p>{{ case.incident or '暂无' }}</p>
+    
+    <h3>案发地点</h3>
+    <p>{{ case.location or '暂无' }}</p>
+    
+</td>
                     
                     <!-- 右栏：摘要和原文 -->
                     <td width="70%" valign="top">
