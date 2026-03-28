@@ -20,7 +20,7 @@
         <div style="margin-bottom: 20px; border: 1px solid #ccc; padding: 10px;">
             <h3>{{ cases[0].name }} ({{ cases[0].sort }})</h3>
             
-            {% if cases[0].is_nlp_analyzed and cases[0].get_keywords_list() %}
+            {% if cases[0].get_keywords_list() %}
                 <p><strong>关键词:</strong>
                     {% for keyword in cases[0].get_keywords_list() %}
                         <span style="background: #f0f0f0; padding: 3px 6px; margin: 2px;">
@@ -36,6 +36,519 @@
                 <p>未分析或关键词为空</p>
             {% endif %}
         </div>
+        
+        <!-- 人物关系图谱 -->
+        <form method="POST" action="/statistic/rebuild" style="margin: 10px 0;">
+            <input type="hidden" name="case_id" value="{{ current_case_id or '' }}">
+            <button type="submit" style="padding: 6px 12px; background-color: #2c5282; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                生成/刷新 知识图谱
+            </button>
+        </form>
+        <div style="margin:6px 0 10px 0; color:#2c5282; font-size: 14px;">
+            提示：点击节点可高亮其相邻对象，再次点击或点击空白处可取消高亮；支持鼠标滚轮缩放与拖拽平移查看。
+        </div>
+        <!-- 渲染与控制 -->
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:8px 0;">
+            <label><input type="checkbox" id="autoSimplify"> 自动简化（以原告/被告为核心的2跳子图，并删除无连接节点）</label>
+            <button id="applySimplifyBtn" type="button" style="padding:6px 10px; background:#3182ce; color:#fff; border:none; border-radius:4px; cursor:pointer;">应用</button>
+            <button id="resetGraphBtn" type="button" style="padding:6px 10px; background:#a0aec0; color:#fff; border:none; border-radius:4px; cursor:pointer;">重置</button>
+            <span style="margin-left:12px; color:#2c5282;">事件密度：</span>
+            <input id="eventTopSlider" type="range" min="10" max="120" value="40" step="5">
+            <span id="eventTopValue" style="min-width:40px; display:inline-block;">Top-40</span>
+        </div>
+        <div id="graph" style="width: 100%; height: 760px; background: #fff; border: 1px solid #a0c8f8; border-radius: 8px;"></div>
+        <!-- 悬浮窗：显示文书片段 -->
+        <div id="hoverCard" style="position:absolute; display:none; max-width:480px; background:#fff; border:1px solid #cbd5e0; box-shadow:0 2px 10px rgba(0,0,0,0.1); padding:10px; border-radius:8px; font-size:13px; color:#2d3748; z-index:1000;"></div>
+        
+        <!-- 人工纠偏面板 -->
+        <details style="margin-top:10px; background:#fff; border:1px solid #a0c8f8; border-radius:8px; padding:10px;">
+            <summary style="cursor:pointer; color:#2c5282; font-weight:bold;">人工纠偏：勾选需要删除的节点/关系并保存</summary>
+            <div style="display:flex; gap:20px; margin-top:8px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:280px;">
+                    <h4 style="margin:6px 0; color:#2c5282;">节点</h4>
+                    <div id="nodeList" style="max-height:200px; overflow:auto; border:1px solid #e2e8f0; padding:6px; border-radius:6px;"></div>
+                </div>
+                <div style="flex:1; min-width:280px;">
+                    <h4 style="margin:6px 0; color:#2c5282;">关系</h4>
+                    <div id="linkList" style="max-height:200px; overflow:auto; border:1px solid #e2e8f0; padding:6px; border-radius:6px;"></div>
+                </div>
+            </div>
+            <form id="saveForm" method="POST" action="/statistic/save_graph" style="margin-top:10px;">
+                <input type="hidden" name="case_id" value="{{ current_case_id or '' }}">
+                <input type="hidden" name="graph_json" id="graphJsonInput" value="">
+                <button type="button" onclick="applyEditsAndSubmit()" style="padding:6px 12px; background-color:#2c5282; color:#fff; border:none; border-radius:4px; cursor:pointer;">
+                    应用修正并保存
+                </button>
+            </form>
+        </details>
+        
+        <script>
+            // 简单的D3力导图渲染（内联，避免额外依赖）
+            // 若没有图数据，graph_json 将是 {"nodes":[],"links":[]}
+            const fullGraph = {{ graph_json | safe }};
+            let graphData = JSON.parse(JSON.stringify(fullGraph));
+            const rawData = {{ raw_json | safe }};
+            const docText = `{{ doc_text | replace('\n', ' ') | replace('\r', ' ') | replace('"', '\\"') }}`;
+            
+            // 动态加载D3（v7），若无法外网加载，可改为本地静态文件
+            (function(){
+                const d3src = "https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js";
+                const s = document.createElement('script');
+                s.src = d3src;
+                s.onload = () => { attachControls(); document.getElementById('graph').innerHTML=''; renderGraph(); };
+                document.head.appendChild(s);
+            })();
+            
+            function attachControls() {
+              document.getElementById('applySimplifyBtn').addEventListener('click', () => {
+                applySimplifyAndRender();
+              });
+              document.getElementById('resetGraphBtn').addEventListener('click', () => {
+                graphData = JSON.parse(JSON.stringify(fullGraph));
+                document.getElementById('graph').innerHTML = '';
+                renderGraph();
+              });
+              const es = document.getElementById('eventTopSlider');
+              const ev = document.getElementById('eventTopValue');
+              es.addEventListener('input', () => { ev.textContent = 'Top-' + es.value; });
+            }
+            
+            function applySimplifyAndRender() {
+              const auto = document.getElementById('autoSimplify').checked;
+              if (auto) {
+                const pruned = pruneIsolated(fullGraph);
+                graphData = twoHopAroundCore(pruned);
+              } else {
+                graphData = JSON.parse(JSON.stringify(fullGraph));
+                graphData = pruneIsolated(graphData);
+              }
+              // 事件密度限制：按置信度与度数排序，仅保留Top-N事件（保留与其相连的非事件节点）
+              const topN = Number(document.getElementById('eventTopSlider').value || 40);
+              graphData = limitTopEvents(graphData, topN);
+              document.getElementById('graph').innerHTML = '';
+              renderGraph();
+            }
+            
+            function pruneIsolated(g) {
+              const used = new Set();
+              g.links.forEach(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                used.add(s); used.add(t);
+              });
+              const nodes = g.nodes.filter(n => used.has(n.id));
+              const nodeIds = new Set(nodes.map(n => n.id));
+              const links = g.links.filter(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                return nodeIds.has(s) && nodeIds.has(t);
+              });
+              return { nodes, links };
+            }
+            
+            function twoHopAroundCore(g) {
+              // 找核心：role 为 原告/被告 的人物；若无，则所有 person；若仍无，则返回原图
+              const persons = g.nodes.filter(n => n.type === 'person');
+              const cores = g.nodes.filter(n => n.type === 'person' && (n.role === '原告' || n.role === '被告'));
+              const coreIds = new Set((cores.length ? cores : persons).map(n => n.id));
+              if (coreIds.size === 0) return g;
+              // 邻接表
+              const adj = new Map();
+              g.nodes.forEach(n => adj.set(n.id, new Set()));
+              g.links.forEach(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                if (adj.has(s)) adj.get(s).add(t);
+                if (adj.has(t)) adj.get(t).add(s);
+              });
+              // BFS 2跳
+              const keep = new Set([...coreIds]);
+              const q = [...coreIds].map(id => ({ id, d: 0 }));
+              while (q.length) {
+                const { id, d } = q.shift();
+                if (d === 2) continue;
+                (adj.get(id) || new Set()).forEach(nid => {
+                  if (!keep.has(nid)) {
+                    keep.add(nid);
+                    q.push({ id: nid, d: d + 1 });
+                  }
+                });
+              }
+              const nodes = g.nodes.filter(n => keep.has(n.id));
+              const nodeIds = new Set(nodes.map(n => n.id));
+              const links = g.links.filter(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                return nodeIds.has(s) && nodeIds.has(t);
+              });
+              return { nodes, links };
+            }
+            
+            function limitTopEvents(g, topN) {
+              const nodes = g.nodes.slice();
+              const links = g.links.slice();
+              // 计算度与置信度
+              const deg = new Map(nodes.map(n => [n.id, 0]));
+              links.forEach(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                deg.set(s, (deg.get(s) || 0) + 1);
+                deg.set(t, (deg.get(t) || 0) + 1);
+              });
+              const events = nodes.filter(n => n.type === 'event');
+              // 打分：score = 0.7*degree_norm + 0.3*confidence
+              const maxDeg = Math.max(1, ...events.map(n => deg.get(n.id) || 0));
+              const scored = events.map(n => {
+                const d = (deg.get(n.id) || 0) / maxDeg;
+                const c = (typeof n.conf === 'number') ? n.conf : 1.0;
+                return { id: n.id, score: 0.7*d + 0.3*c };
+              }).sort((a,b) => b.score - a.score);
+              const keepEventIds = new Set(scored.slice(0, Math.max(1, topN)).map(x => x.id));
+              // 过滤：保留Top-N事件 + 与这些事件直接相连的节点与边
+              const keepNodeIds = new Set();
+              // 先标记事件
+              keepEventIds.forEach(id => keepNodeIds.add(id));
+              // 再标记与事件直接相邻节点
+              links.forEach(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                if (keepEventIds.has(s) || keepEventIds.has(t)) {
+                  keepNodeIds.add(s);
+                  keepNodeIds.add(t);
+                }
+              });
+              const keptNodes = nodes.filter(n => keepNodeIds.has(n.id));
+              const keptIdSet = new Set(keptNodes.map(n => n.id));
+              const keptLinks = links.filter(l => {
+                const s = l.source && l.source.id ? l.source.id : l.source;
+                const t = l.target && l.target.id ? l.target.id : l.target;
+                return keptIdSet.has(s) && keptIdSet.has(t);
+              });
+              return { nodes: keptNodes, links: keptLinks };
+            }
+            
+            function renderGraph() {
+                const width = document.getElementById('graph').clientWidth;
+                // 根据节点数量自适应放大间距与画布高度
+                const count = (graphData && graphData.nodes) ? graphData.nodes.length : 0;
+                const scale = count > 60 ? 1.6 : count > 40 ? 1.4 : count > 25 ? 1.2 : 1.0;
+                const height = Math.floor(740 * Math.min(scale, 1.6));
+                
+                const svg = d3.select("#graph").append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+                // 箭头与样式
+                const defs = svg.append("defs");
+                defs.append("marker")
+                    .attr("id", "arrow")
+                    .attr("viewBox", "0 -5 10 10")
+                    .attr("refX", 20)
+                    .attr("refY", 0)
+                    .attr("markerWidth", 8)
+                    .attr("markerHeight", 8)
+                    .attr("orient", "auto")
+                  .append("path")
+                    .attr("d", "M0,-5L10,0L0,5")
+                    .attr("fill", "#999")
+                    .attr("opacity", 0.7);
+                
+                // 缩放/平移容器
+                const zoomLayer = svg.append("g").attr("class", "zoom-layer");
+                svg.call(d3.zoom()
+                  .scaleExtent([0.35, 4.0])
+                  .on("zoom", (event) => {
+                    zoomLayer.attr("transform", event.transform);
+                  })
+                );
+                // 按类型上色：person/event/time/location
+                const typeColor = d3.scaleOrdinal()
+                  .domain(["person","event","time","location"])
+                  .range(["#1f77b4","#ff7f0e","#2ca02c","#d62728"]);
+                
+                // 分区布局以减少重叠：按类型吸向不同区域 + 碰撞力
+                const cx = width / 2, cy = height / 2;
+                const typeTarget = (d) => {
+                  switch (d.type) {
+                    case 'person': return { x: cx - width * (0.35 * scale), y: cy };
+                    case 'event': return { x: cx, y: cy };
+                    case 'time': return { x: cx + width * (0.35 * scale), y: cy - (120 * scale) };
+                    case 'location': return { x: cx + width * (0.35 * scale), y: cy + (120 * scale) };
+                    default: return { x: cx, y: cy };
+                  }
+                };
+                
+                const simulation = d3.forceSimulation(graphData.nodes)
+                    .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(l => {
+                        const rel = (l.relation || '');
+                        if (rel.includes('发生于') || rel.includes('发生在')) return 180 * scale;
+                        if (rel.includes('参与') || rel.includes('涉及')) return 240 * scale;
+                        return 210 * scale;
+                    }).strength(0.75))
+                    .force("charge", d3.forceManyBody().strength(-450 * Math.pow(scale, 1.2)).distanceMin(60 * scale).distanceMax(800 * scale))
+                    .force("center", d3.forceCenter(cx, cy))
+                    .force("collide", d3.forceCollide().radius(d => (d.type === 'person' && (d.role === '原告' || d.role === '被告')) ? 34 * scale
+                                                                  : d.type === 'event' ? 28 * scale : 24 * scale).iterations(3))
+                    .force("x", d3.forceX().strength(0.24).x(d => typeTarget(d).x))
+                    .force("y", d3.forceY().strength(0.24).y(d => typeTarget(d).y));
+                
+                const link = zoomLayer.append("g")
+                    .attr("stroke", "#999")
+                    .attr("stroke-opacity", 0.6)
+                  .selectAll("line")
+                  .data(graphData.links)
+                  .enter().append("line")
+                    .attr("stroke-width", 2.2)
+                    .attr("marker-end", "url(#arrow)");
+                
+                const node = zoomLayer.append("g")
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 1.5)
+                  .selectAll("circle")
+                  .data(graphData.nodes)
+                  .enter().append("circle")
+                    .attr("r", d => (d.type === 'person' && (d.role === '原告' || d.role === '被告')) ? 16 * scale
+                                     : d.type === 'person' ? 13 * scale
+                                     : d.type === 'event' ? 14 * scale
+                                     : 12 * scale)
+                    .attr("fill", d => typeColor(d.type || 'event'))
+                    .call(drag(simulation))
+                    .on("click", (event, d) => {
+                        event.stopPropagation();
+                        toggleHighlight(d);
+                        showHover(event, d);
+                    });
+                
+                const labels = zoomLayer.append("g")
+                  .selectAll("text")
+                  .data(graphData.nodes)
+                  .enter().append("text")
+                    .attr("font-size", 14 * Math.min(scale, 1.3))
+                    .attr("dx", 10)
+                    .attr("dy", "0.35em")
+                    .text(d => {
+                        if (d.type === 'person') return d.role ? `${d.name}（${d.role}）` : d.name;
+                        if (d.type === 'event') return `事件：${d.name}`;
+                        if (d.type === 'time') return `时间：${d.name}`;
+                        if (d.type === 'location') return `地点：${d.name}`;
+                        return d.name;
+                    });
+                
+                const linkLabels = zoomLayer.append("g")
+                  .selectAll("text")
+                  .data(graphData.links)
+                  .enter().append("text")
+                    .attr("font-size", 12 * Math.min(scale, 1.2))
+                    .attr("fill", "#555")
+                    .text(d => d.relation || "");
+                
+                node.append("title").text(d => d.name);
+                
+                simulation.on("tick", () => {
+                  link
+                      .attr("x1", d => d.source.x)
+                      .attr("y1", d => d.source.y)
+                      .attr("x2", d => d.target.x)
+                      .attr("y2", d => d.target.y);
+                  
+                  node
+                      .attr("cx", d => d.x)
+                      .attr("cy", d => d.y);
+                  
+                  labels
+                      .attr("x", d => d.x)
+                      .attr("y", d => d.y);
+                  
+                  linkLabels
+                      .attr("x", d => (d.source.x + d.target.x) / 2)
+                      .attr("y", d => (d.source.y + d.target.y) / 2);
+                });
+                
+                function drag(simulation) {
+                  function dragstarted(event, d) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                  }
+                  
+                  function dragged(event, d) {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                  }
+                  
+                  function dragended(event, d) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                  }
+                  
+                  return d3.drag()
+                      .on("start", dragstarted)
+                      .on("drag", dragged)
+                      .on("end", dragended);
+                }
+                
+                // ========= 高亮交互 =========
+                let selectedId = null;
+                const neighbor = buildNeighborMap(graphData.nodes, graphData.links);
+                
+                function buildNeighborMap(nodes, links) {
+                  const idSet = new Set(nodes.map(n => n.id));
+                  const map = new Map();
+                  nodes.forEach(n => map.set(n.id, new Set([n.id])));
+                  links.forEach(l => {
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    if (idSet.has(s) && idSet.has(t)) {
+                      map.get(s).add(t);
+                      map.get(t).add(s);
+                    }
+                  });
+                  return map;
+                }
+                
+                function toggleHighlight(d) {
+                  if (selectedId === d.id) {
+                    selectedId = null;
+                    setHighlight(null);
+                  } else {
+                    selectedId = d.id;
+                    setHighlight(selectedId);
+                  }
+                }
+                
+                function setHighlight(centerId) {
+                  if (!centerId) {
+                    node.attr("opacity", 1.0);
+                    labels.attr("opacity", 1.0);
+                    link.attr("opacity", 0.6);
+                    linkLabels.attr("opacity", 1.0);
+                    return;
+                  }
+                  const nbrs = neighbor.get(centerId) || new Set();
+                  node.attr("opacity", n => (nbrs.has(n.id) ? 1.0 : 0.15));
+                  labels.attr("opacity", n => (nbrs.has(n.id) ? 1.0 : 0.15));
+                  link.attr("opacity", l => {
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    return (nbrs.has(s) && nbrs.has(t)) ? 0.9 : 0.08;
+                  });
+                  linkLabels.attr("opacity", l => {
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    return (nbrs.has(s) && nbrs.has(t)) ? 1.0 : 0.1;
+                  });
+                }
+                
+                // 点击空白区域清除高亮
+                svg.on("click", (event) => {
+                  if (event.target.tagName === 'svg') {
+                    selectedId = null;
+                    setHighlight(null);
+                    hideHover();
+                  }
+                });
+                
+                // -------- 人工纠偏列表生成 --------
+                buildEditLists();
+                
+                function buildEditLists() {
+                  const nodeBox = document.getElementById('nodeList');
+                  const linkBox = document.getElementById('linkList');
+                  nodeBox.innerHTML = '';
+                  linkBox.innerHTML = '';
+                  graphData.nodes.forEach(n => {
+                    const id = `n_${n.id}`;
+                    const row = document.createElement('label');
+                    row.style.display = 'block';
+                    row.style.margin = '2px 0';
+                    row.innerHTML = `<input type="checkbox" id="${id}"> <span style="color:#2c5282;">[${n.type||'event'}]</span> ${n.name}${n.role? '（'+n.role+'）':''} <small style="color:#718096">id=${n.id}</small>`;
+                    nodeBox.appendChild(row);
+                  });
+                  graphData.links.forEach((l, idx) => {
+                    const id = `e_${idx}`;
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    const row = document.createElement('label');
+                    row.style.display = 'block';
+                    row.style.margin = '2px 0';
+                    row.innerHTML = `<input type="checkbox" id="${id}"> ${s} → ${t} <small style="color:#718096">${l.relation||''}</small>`;
+                    linkBox.appendChild(row);
+                  });
+                }
+                
+                window.applyEditsAndSubmit = function() {
+                  // 收集需要删除的节点与关系
+                  const removeNodeIds = new Set();
+                  graphData.nodes.forEach(n => {
+                    const cb = document.getElementById(`n_${n.id}`);
+                    if (cb && cb.checked) removeNodeIds.add(n.id);
+                  });
+                  const removeLinkIdx = new Set();
+                  graphData.links.forEach((_, idx) => {
+                    const cb = document.getElementById(`e_${idx}`);
+                    if (cb && cb.checked) removeLinkIdx.add(idx);
+                  });
+                  // 生成新图谱：剔除勾选节点与相关边，再剔除勾选的关系
+                  const keptNodes = graphData.nodes.filter(n => !removeNodeIds.has(n.id));
+                  const keptNodeIds = new Set(keptNodes.map(n => n.id));
+                  const keptLinks1 = graphData.links.filter((l, idx) => !removeLinkIdx.has(idx));
+                  const keptLinks2 = keptLinks1.filter(l => {
+                    const s = l.source.id || l.source;
+                    const t = l.target.id || l.target;
+                    return keptNodeIds.has(s) && keptNodeIds.has(t);
+                  });
+                  const newGraph = { nodes: keptNodes, links: keptLinks2 };
+                  document.getElementById('graphJsonInput').value = JSON.stringify(newGraph);
+                  document.getElementById('saveForm').submit();
+                }
+                
+                // ========= 悬浮窗（展示原文片段） =========
+                function showHover(evt, d) {
+                  const hc = document.getElementById('hoverCard');
+                  if (!hc) return;
+                  const snippet = makeSnippet(d.name || '', docText, 140);
+                  hc.innerHTML = `<div style="color:#2c5282; font-weight:bold; margin-bottom:4px;">${d.name || ''}</div><div>${snippet}</div>`;
+                  const x = evt.pageX + 12;
+                  const y = evt.pageY + 12;
+                  hc.style.left = x + 'px';
+                  hc.style.top = y + 'px';
+                  hc.style.display = 'block';
+                }
+                function hideHover() {
+                  const hc = document.getElementById('hoverCard');
+                  if (hc) hc.style.display = 'none';
+                }
+                function makeSnippet(query, text, radius) {
+                  if (!text || !query) return '（无匹配片段，显示开头）<br>' + escapeHtml(text.slice(0, radius*1.5));
+                  const idx = text.indexOf(query);
+                  if (idx === -1) return escapeHtml(text.slice(0, radius*1.5));
+                  const start = Math.max(0, idx - radius);
+                  const end = Math.min(text.length, idx + query.length + radius);
+                  const pre = escapeHtml(text.slice(start, idx));
+                  const hit = `<span style="background:#fff3bf; color:#b45309;">${escapeHtml(query)}</span>`;
+                  const post = escapeHtml(text.slice(idx + query.length, end));
+                  return (start>0?'...':'') + pre + hit + post + (end<text.length?'...':'');
+                }
+                function escapeHtml(s) {
+                  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                }
+            }
+        </script>
+        
+        <!-- 图例 -->
+        <div style="margin-top:8px; font-size: 12px; color:#2c5282;">
+            图例：
+            <span style="display:inline-block;width:10px;height:10px;background:#1f77b4;border-radius:50%;vertical-align:middle;margin:0 4px;"></span>人物
+            <span style="display:inline-block;width:10px;height:10px;background:#ff7f0e;border-radius:50%;vertical-align:middle;margin:0 4px;"></span>事件
+            <span style="display:inline-block;width:10px;height:10px;background:#2ca02c;border-radius:50%;vertical-align:middle;margin:0 4px;"></span>时间
+            <span style="display:inline-block;width:10px;height:10px;background:#d62728;border-radius:50%;vertical-align:middle;margin:0 4px;"></span>地点
+            （原告/被告更大）
+        </div>
+        <!-- 原始JSON（用于调试） -->
+        <details style="margin-top:8px;">
+            <summary style="cursor:pointer;color:#2c5282;">查看抽取原始JSON（调试用）</summary>
+            <pre style="white-space:pre-wrap;background:#f7fafc;border:1px solid #e2e8f0;padding:8px;border-radius:6px;">{{ raw_json }}</pre>
+        </details>
     {% else %}
         <p>还没有案件数据</p>
     {% endif %}

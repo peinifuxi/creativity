@@ -30,7 +30,7 @@ def case_submit():
         # 调用API分析
         if content and len(content.strip()) > 50:
             try:
-                from .api import analyze_case_with_api
+                from .api import analyze_case_with_api, extract_entities_relations
                 analysis_result = analyze_case_with_api(content)  
                 
                 if analysis_result:
@@ -55,6 +55,23 @@ def case_submit():
                     new_case.incident = analysis_result.get('dispute', '')
                     new_case.location = analysis_result.get('location', '')[:100]
                     
+                    
+                    # 实体关系抽取 -> 生成人物关系图谱（存入 predict_result 字段）
+                    # 构造抽取先验线索
+                    hints = {
+                        "persons": persons,
+                        "incident": analysis_result.get('dispute', ''),
+                        "location": analysis_result.get('location', ''),
+                        "time": ""  # 可后续从正文规则提取
+                    }
+                    extract_result = extract_entities_relations(content, hints=hints)
+                    if extract_result:
+                        graph = extract_result.get('graph', {"nodes": [], "links": []})
+                        # 若抽取返回了更规范的 persons，则同步覆盖人物字段
+                        persons_from_extract = extract_result.get('persons')
+                        if isinstance(persons_from_extract, list) and persons_from_extract:
+                            new_case.person = json.dumps(persons_from_extract, ensure_ascii=False)
+                        new_case.predict_result = json.dumps({"graph": graph, "raw": extract_result.get("raw", {})}, ensure_ascii=False)
                     
                     db.session.commit()
             except Exception as e:

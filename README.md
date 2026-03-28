@@ -16,7 +16,7 @@ cd annotation_system
 安装依赖
 
 bash
-pip install -r requirements
+pip install -r requirement
 运行应用
 
 bash
