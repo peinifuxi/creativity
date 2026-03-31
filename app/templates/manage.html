@@ -12,7 +12,7 @@
         <a href="/">首页</a> | 
         <a href="/annotate">标注页面</a> | 
         <a href="/statistic">统计页面</a> | 
-        <a href="/predict">判决预测页面</a> |  
+        <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
         <a href="/manage">管理页面</a>
     
 
@@ -75,6 +75,8 @@
             <td>{{ case.sort }}</td>
             <td>
                 <a href="/annotate?case_id={{ case.id }}">查看</a>
+                |
+                <a href="/predict?case_id={{ case.id }}">预测</a>
                 |
                 <form action="/delete/{{ case.id }}" method="POST" style="display: inline;">
                     <button type="submit" onclick="return confirm('确定删除【{{ case.name }}】吗？')" 

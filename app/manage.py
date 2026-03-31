@@ -33,6 +33,7 @@ def manage():
                          cases=cases,
                          pagination=pagination,
                          keyword=keyword,
+                         selected_sort=sort_type,
                          total_count=total_count,
                          filtered_count=filtered_count)
 

@@ -3,19 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>统计页面</title>
+    <title>判决预测页面</title>
 </head>
 <body>
     <!-- 导航 -->
     <a href="/">首页</a> | 
     <a href="/annotate">标注页面</a> | 
     <a href="/statistic">统计页面</a> |
-    <a href="/predict">判决预测页面</a> |  
+    <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
     <a href="/manage">管理页面</a> 
 
     <h1>判决预测页面</h1>
-    
-  
+
+    {% if cases %}
+        {% set case = cases[0] %}
+
+        <div class="card">
+            <h3>当前案件</h3>
+            <p><strong>案件名称：</strong>{{ case.name or '未命名案件' }}</p>
+            <p><strong>案件类型：</strong>{{ case.sort or '其他' }}</p>
+            <p><strong>创建时间：</strong>{{ case.time }}</p>
+            <p><strong>预测方法：</strong>{{ case.predict_method or 'official_step' }}</p>
+        </div>
+
+        <div class="card">
+            <h3>预测状态</h3>
+            {% if case.predict_result and case.predict_result.strip() %}
+                <p><span class="status ok">已完成预测</span></p>
+            {% else %}
+                <p><span class="status pending">等待预测结果</span></p>
+                <p class="hint">提交案件后，后端完成大模型调用并写入数据库后，这里会自动展示最新结果。</p>
+            {% endif %}
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>真实判决结果</h3>
+                <div class="result-box">
+                    {{ case.get_actual_result() if case.get_actual_result() else '暂无真实判决结果' }}
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>模型预测结果</h3>
+                <div class="result-box">
+                    {{ case.predict_result if case.predict_result else '尚未预测' }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>提示词预留区（后续可调）</h3>
+            <textarea readonly>{{ case.predict_prompt_template if case.predict_prompt_template else '当前案件尚未记录提示词模板。请从首页重新提交并预测。' }}</textarea>
+            <p class="hint">此处展示的是本次预测实际使用的提示词模板。</p>
+        </div>
+
+        <div class="card">
+            <h3>文书内容（用于预测）</h3>
+            <button onclick="toggleContent()" id="toggleBtn">点击展开完整文书内容</button>
+            <div id="fullContent" class="content-box">
+                {{ case.content if case.content else '暂无文书内容' }}
+            </div>
+        </div>
+
+    {% else %}
+        <div class="card">
+            <h3>还没有可预测的案件</h3>
+            <p>请先在首页提交裁判文书，系统会保存到数据库并执行预测流程。</p>
+            <p><a href="/">返回首页提交案件</a></p>
+        </div>
+    {% endif %}
+
+    <script>
+        function toggleContent() {
+            var contentDiv = document.getElementById('fullContent');
+            var btn = document.getElementById('toggleBtn');
+            if (!contentDiv || !btn) return;
+
+            if (contentDiv.style.display === 'none' || contentDiv.style.display === '') {
+                contentDiv.style.display = 'block';
+                btn.textContent = '点击收起完整文书内容';
+            } else {
+                contentDiv.style.display = 'none';
+                btn.textContent = '点击展开完整文书内容';
+            }
+        }
+    </script>
 </body>
 </html>
 <style>
@@ -28,6 +101,91 @@
     
     h1, h3 {
         color: #2c5282;
+    }
+
+    .card {
+        background-color: white;
+        border: 1px solid #a0c8f8;
+        border-radius: 8px;
+        padding: 18px;
+        margin: 16px 0;
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .result-box {
+        min-height: 80px;
+        background-color: #f8fbff;
+        border: 1px solid #d9ecff;
+        border-radius: 6px;
+        padding: 10px;
+        white-space: pre-wrap;
+    }
+
+    .status {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .status.ok {
+        background-color: #e6ffed;
+        color: #1f7a3b;
+        border: 1px solid #b7efca;
+    }
+
+    .status.pending {
+        background-color: #fff8e6;
+        color: #8a6700;
+        border: 1px solid #ffe4a3;
+    }
+
+    textarea {
+        width: 100%;
+        min-height: 140px;
+        border: 1px solid #a0c8f8;
+        border-radius: 6px;
+        padding: 10px;
+        box-sizing: border-box;
+        resize: vertical;
+        background-color: #f9fcff;
+    }
+
+    .content-box {
+        display: none;
+        margin-top: 10px;
+        background-color: #f9fcff;
+        border: 1px solid #d9ecff;
+        border-radius: 6px;
+        padding: 10px;
+        white-space: pre-wrap;
+        max-height: 360px;
+        overflow-y: auto;
+    }
+
+    button {
+        background-color: #4299e1;
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #3182ce;
+    }
+
+    .hint {
+        color: #4a5568;
+        font-size: 14px;
+        margin-top: 8px;
     }
     
     div[style*="border: 1px solid #ccc"] {

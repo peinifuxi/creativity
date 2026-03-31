@@ -1,261 +1,182 @@
-📋 法律文书标注与分析系统
-一个基于Flask的法律文书智能标注与分析系统，自动提取文书摘要和关键词，支持案件管理和统计。
-
-🚀 快速开始
-环境要求
-Python 3.8+
-
-pip（Python包管理器）
-
-安装步骤
-克隆项目
-
-bash
-git clone <项目地址>
-cd annotation_system
-安装依赖
+# 法律文书标注与判决预测系统
+
+一个基于 Flask 的法律文书处理系统，支持：
+- 文书提交与案件管理
+- 大模型自动提取标题 / 摘要 / 关键词
+- 判决结果预测（多通道）
 
-bash
-pip install -r requirements
-运行应用
+---
 
-bash
-python app.py
-# 或
-python -m app
-访问应用
-打开浏览器访问：http://127.0.0.1:5000
+## 1. 当前技术基线（以代码为准）
 
-📁 项目结构
-text
-annotation_system/
-├── app.py                    # 主应用入口
+- Web 框架：Flask 3.x
+- ORM：Flask-SQLAlchemy
+- 数据库：MySQL（`settings.py` 读取 `.env`）
+- 运行入口：`run.py`
+- 数据初始化入口：`init_db.py`
+- 依赖清单：`requirement.txt`
 
+> 注意：本 README 已按当前仓库代码更新，不再使用早期 `app.py + SQLite` 方案。
 
-│
-├── app/                    # 蓝图模块
-├── __init__.py             # 应用模块入口
-│   ├── index.py            # 首页蓝图（案件提交）
-│   ├── annotate.py         # 标注页面蓝图
-│   ├── statistic.py        # 统计页面蓝图
-│   ├──  manage.py           # 管理页面蓝图
-│   ├── nlp.py              # 自然语言处理蓝图
-|   └── database.py         # 数据库模型定义
-│
-├── nlp/                     # NLP处理模块
-│   ├── __init__.py         # NLP模块入口
-│   ├── summarizer.py       # 文本摘要功能
-│   └── keyword_extractor.py # 关键词提取功能
-│
-├── templates/              # HTML模板
-│   ├── index.html         # 首页（案件提交）
-│   ├── annotate.html      # 标注页面
-│   ├── statistic.html     # 统计页面
-│   └── manage.html        # 管理页面
-│
-└── data/                   # 数据文件（可选）
-    └── legal_dict.txt     # 法律专业词典
-📦 依赖说明
-核心依赖
-Flask (2.3.0+) - Web框架
+---
 
-Flask-SQLAlchemy (3.0.0+) - 数据库ORM
+## 2. 目录结构（简化）
 
-jieba (0.42.1+) - 中文分词和NLP处理
+```text
+creativity/
+├── run.py
+├── init_db.py
+├── settings.py
+├── requirement.txt
+├── start.ps1
+├── stop.ps1
+├── .env.example
+└── app/
+    ├── __init__.py
+    ├── database.py
+    ├── index.py
+    ├── annotate.py
+    ├── statistic.py
+    ├── predict.py
+    ├── manage.py
+    ├── api.py
+    └── templates/
+```
 
-安装所有依赖
-bash
-pip install Flask Flask-SQLAlchemy jieba
-或使用提供的 requirements.txt：
+---
 
-bash
-pip install -r requirements.txt
-🔧 配置说明
-数据库配置
-默认使用SQLite数据库，文件为 db.sqlite3
+## 3. 环境要求
 
-修改数据库配置（在 app.py 中）：
+- Python **3.10.11**（建议使用虚拟环境）
+- MySQL 5.7+ / 8.x
+- Windows PowerShell（仓库内提供 `start.ps1` / `stop.ps1`）
 
-python
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///your_database.db'
-Session配置
-确保在 app.py 中设置secret_key：
+---
 
-python
-app.secret_key = 'your-secret-key-here'
-📝 功能说明
-1. 首页 (/)
-提交新的法律文书案件
+## 4. 首次启动（推荐）
 
-自动进行NLP分析（提取摘要和关键词）
+### 4.1 创建并激活虚拟环境（Python 3.10.11）
 
-2. 标注页面 (/annotate)
-查看案件详细信息
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
-左栏：显示自动提取的关键词
+### 4.2 安装依赖
 
-右栏：
+```powershell
+pip install -r requirement.txt
+```
 
-文书摘要（自动生成）
+### 4.3 配置环境变量
 
-完整文书内容（可展开/收起）
+```powershell
+Copy-Item .env.example .env
+```
 
-自动记录最近查看的案件
+编辑 `.env`，至少配置：
 
-3. 统计页面 (/statistic)
-显示当前查看案件的关键词统计
+- 数据库
+  - `DB_HOST`
+  - `DB_PORT`
+  - `DB_USER`
+  - `DB_PASSWORD`
+  - `DB_NAME`
+- Flask
+  - `SECRET_KEY`
+- 模型（可按你使用的通道配置）
+  - `DEEPSEEK_API_KEY`（案件分析）
+  - `SILICONFLOW_API_KEY`（官方模型预测通道）
 
-与标注页面保持同步（显示同一案件）
+### 4.4 初始化数据库（建库 + 建表 + 历史字段补齐）
 
-4. 管理页面 (/manage)
-查看所有案件列表
+```powershell
+python init_db.py
+```
 
-删除案件
+### 4.5 启动应用
 
-点击案件名称查看详情
+```powershell
+python run.py
+```
 
-🤖 NLP功能
-自动提取功能
-文本摘要
+或：
 
-基于TextRank算法
+```powershell
+.\start.ps1
+```
 
-提取文书核心内容（约5句话）
+访问：<http://127.0.0.1:5000>
 
-智能识别法律文书重要部分
+---
 
-关键词提取
+## 5. 业务主流程
 
-基于TF-IDF算法
+1. 首页提交文书（`/` -> `/casesubmit`）
+2. 后端写入 `cases` 表
+3. 调用分析接口：提取标题、类型、摘要、关键词
+4. 调用预测接口：写入 `predict_result`
+5. 跳转标注页查看结果（`/annotate?case_id=...`）
 
-分类显示：罪名、程序、刑罚等
+核心代码位置：
+- 提交流程：`app/index.py`
+- 分析与预测：`app/api.py`
+- 数据模型：`app/database.py`
 
-支持法律专业术语识别
+---
 
-自定义词典
-系统使用法律专业词典（data/legal_dict.txt），包含：
+## 6. 判决预测通道
 
-法律罪名：故意杀人罪、抢劫罪等
+在 `app/api.py` 中统一分发：
 
-法律程序：一审、二审、上诉等
+- `official_step`：官方现成大模型（硅基流动）
+- `self_hosted_lawgpt`：自部署模型（预留）
+- `coze_workflow`：Coze 工作流
+- `langgraph_workflow`：LangGraph 多步工作流（案件类型路由 + 校验回路）
 
-法律术语：有期徒刑、罚金等
+默认通道来自：`PREDICT_METHOD_DEFAULT`。
 
-🗄️ 数据库模型
-Case表结构
-python
-class Case:
-    id: Integer                    # 主键
-    name: String(50)               # 案件名称
-    sort: String(10)               # 案件类型（刑事/民事/行政）
-    cause: String(200)             # 案由
-    result: String(200)            # 判决结果
-    content: Text                  # 文书内容
-    browses: Integer               # 浏览量
-    
-    # NLP分析结果
-    summary: Text                  # 文本摘要
-    keywords: Text                 # 关键词（JSON格式）
-    is_nlp_analyzed: Boolean       # 是否已分析
-    analyzed_at: DateTime          # 分析时间
-🔍 使用示例
-提交案件
-访问 http://127.0.0.1:5000
+---
 
-填写：
+## 7. 常见问题
 
-案例名称：测试案件
+### 7.1 端口 5000 被占用
 
-案例类型：刑事
+```powershell
+.\stop.ps1
+```
 
-文书内容：（粘贴裁判文书）
+再启动：
 
-点击提交，自动跳转到标注页面
+```powershell
+.\start.ps1
+```
 
-查看分析结果
-标注页面：显示摘要和关键词
+### 7.2 数据库连接失败
 
-统计页面：显示关键词统计
+检查：
+- MySQL 服务已启动
+- `.env` 的 `DB_*` 配置正确
+- 账号有创建数据库/建表权限
 
-管理页面：查看所有案件
+### 7.3 提交后没有预测结果
 
-🐛 常见问题
-Q1: 启动时出现端口占用错误
-bash
-# 方法1：更换端口
-python app.py --port=5001
+检查：
+- 对应 API Key 已配置
+- 文书内容不要过短（建议 > 50 字）
+- 观察控制台输出错误信息
 
-# 方法2：结束占用进程（Windows）
-netstat -ano | findstr :5000
-taskkill /PID [进程ID] /F
-Q2: 关键词没有显示
-检查是否安装jieba：pip install jieba
+---
 
-检查文书内容是否足够长（>50字符）
+## 8. 开发建议
 
-查看控制台是否有NLP分析错误
+- 每次改数据模型后，先运行 `python init_db.py` 再启动。
+- 变更配置字段时同步更新 `.env.example`。
+- 优先通过 `start.ps1` / `stop.ps1` 统一本地启动流程。
 
-Q3: Session不工作
-确保在 app.py 中设置了secret_key：
+---
 
-python
-app.secret_key = 'your-secret-key'
-Q4: 数据库表不存在
-删除旧的数据库文件，重新运行应用：
+## 9. 提示词评测（方案一）
 
-bash
-# 删除 db.sqlite3 文件
-python app.py  # 自动创建新表
-📊 技术栈
-后端：Flask + SQLAlchemy
-
-前端：HTML + Jinja2模板
-
-NLP：jieba中文分词
-
-数据库：SQLite（可更换为MySQL/PostgreSQL）
-
-样式：内联CSS（浅蓝色主题）
-
-🔄 工作流程
-text
-用户提交文书 → 保存到数据库 → 自动NLP分析 → 
-↓
-标注页面显示结果 ← 跳转 ← 保存分析结果
-↓  
-统计页面同步显示 ← Session记录当前案件
-📈 扩展建议
-可添加的功能
-批量导入：支持上传多个文书文件
-
-高级搜索：按关键词搜索案件
-
-分析报告：生成详细的分析报告
-
-用户系统：多用户支持
-
-API接口：提供RESTful API
-
-性能优化
-使用缓存减少NLP分析时间
-
-数据库索引优化
-
-异步处理长文本分析
-
-📄 许可证
-本项目仅供学习使用。
-
-🙏 致谢
-jieba - 优秀的中文分词工具
-
-Flask - 轻量级Web框架
-
-SQLAlchemy - Python SQL工具包
-
-📞 联系
-如有问题或建议，请提交Issue或联系项目维护者。
-
-开始使用：python app.py → 访问 http://localhost:5000
-
-祝您使用愉快！🎉
+- 已提供离线评测脚本与说明文档：`eval/README.md`
+- 可直接执行（20条低token版）：`python eval/run_prompt_eval.py --limit 20 --method official_step --prompt-version v1`

@@ -9,7 +9,7 @@
     <a href="/">首页</a> | 
     <a href="/annotate">标注页面</a> | 
     <a href="/statistic">统计页面</a>| 
-    <a href="/predict">判决预测页面</a> |  
+    <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
     <a href="/manage">管理页面</a> 
     <h1>上传裁判文书</h1>
     
@@ -17,6 +17,15 @@
     
     内容：<textarea name="content" placeholder="请粘贴裁判文书内容..."></textarea><br>
     判决结果：<input type="text" name="result" placeholder="请输入判决结果" class="result-input"><br>
+    预测方法：
+    <select name="predict_method" class="method-select">
+        <option value="official_step" selected>方案1：官方现成大模型（硅基流动）</option>
+        <option value="self_hosted_lawgpt">方案2：自部署微调模型（LawGPT预留）</option>
+        <option value="coze_workflow">方案3：Coze工作流+知识库（预留）</option>
+        <option value="langgraph_workflow">方案4：LangGraph多步工作流（分支路由+校验回路）</option>
+    </select><br>
+    预测提示词模板（可选）：
+    <textarea name="predict_prompt_template" class="prompt-input" placeholder="可选：自定义判决预测提示词模板。可用占位符 {case_type} 和 {content}。"></textarea><br>
     <input type="submit" value="提交">
 </form>
     
@@ -60,6 +69,27 @@
         border: 1px solid #a0c8f8;
         border-radius: 4px;
         box-sizing: border-box;
+    }
+
+    .prompt-input {
+        width: 100%;
+        padding: 8px;
+        margin: 8px 0 16px 0;
+        border: 1px solid #a0c8f8;
+        border-radius: 4px;
+        box-sizing: border-box;
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .method-select {
+        width: 100%;
+        padding: 8px;
+        margin: 8px 0 16px 0;
+        border: 1px solid #a0c8f8;
+        border-radius: 4px;
+        box-sizing: border-box;
+        background-color: white;
     }
     
     input[type="submit"] {
