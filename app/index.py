@@ -10,7 +10,59 @@ index_bp = Blueprint('index', __name__)
 
 @index_bp.route('/')
 def index():
-    return render_template('index.html')
+    total_cases = Case.query.count()
+    predicted_cases = Case.query.filter(Case.predict_result.isnot(None), Case.predict_result != '').count()
+    graphed_cases = Case.query.filter(Case.graph_result.isnot(None), Case.graph_result != '').count()
+    actual_cases = Case.query.filter(Case.actual_result.isnot(None), Case.actual_result != '').count()
+    latest_case = Case.query.order_by(Case.id.desc()).first()
+
+    module_cards = [
+        {
+            "title": "文书提交中心",
+            "subtitle": "从这里开始录入新案件，并触发分析、图谱和预测流程",
+            "href": "#submit-panel",
+            "tag": "首页工作台",
+            "accent": "cyan"
+        },
+        {
+            "title": "智能标注页面",
+            "subtitle": "进入后可核对案件摘要、关键词和图谱预览结果",
+            "href": "/annotate",
+            "tag": "标注",
+            "accent": "blue"
+        },
+        {
+            "title": "知识图谱统计",
+            "subtitle": "进入后可查看完整知识图谱，并对图谱结果进行检查与纠偏",
+            "href": "/statistic",
+            "tag": "统计",
+            "accent": "violet"
+        },
+        {
+            "title": "判决预测页面",
+            "subtitle": "进入后可查看模型预测结果，并与真实判决逐项对照",
+            "href": "/predict",
+            "tag": "预测",
+            "accent": "teal"
+        },
+        {
+            "title": "案件管理页面",
+            "subtitle": "进入后可检索、筛选和继续处理已有案件",
+            "href": "/manage",
+            "tag": "管理",
+            "accent": "indigo"
+        },
+    ]
+
+    return render_template(
+        'index.html',
+        total_cases=total_cases,
+        predicted_cases=predicted_cases,
+        graphed_cases=graphed_cases,
+        actual_cases=actual_cases,
+        latest_case=latest_case,
+        module_cards=module_cards
+    )
 
 
 def _build_initial_case_name(content: str) -> str:
@@ -71,7 +123,7 @@ def case_submit():
         db.session.add(new_case)
         db.session.commit()
 
-        from .api import analyze_case_with_api, predict_judgement_with_api
+        from .api import analyze_case_with_api, predict_judgement_with_api, extract_entities_relations
 
         if len(content) > 50 and settings.DEEPSEEK_API_KEY:
             try:
@@ -82,6 +134,33 @@ def case_submit():
                     new_case.sort = analysis_result.get('sort', new_case.sort)
                     new_case.summary = analysis_result.get('summary', '')
                     new_case.keywords = json.dumps(analysis_result.get('keywords', []), ensure_ascii=False)
+                    new_case.court = (analysis_result.get('court') or '')[:50]
+                    new_case.law = json.dumps(analysis_result.get('laws', []), ensure_ascii=False)
+                    persons = analysis_result.get('persons', [])
+                    new_case.person = json.dumps(persons if isinstance(persons, list) else [], ensure_ascii=False)
+                    new_case.incident = analysis_result.get('dispute', '')
+                    new_case.location = (analysis_result.get('location') or '')[:100]
+
+                    hints = {
+                        "persons": persons if isinstance(persons, list) else [],
+                        "incident": analysis_result.get('dispute', ''),
+                        "location": analysis_result.get('location', ''),
+                        "time": ""
+                    }
+                    extract_result = extract_entities_relations(content, hints=hints)
+                    if extract_result:
+                        graph = extract_result.get('graph', {"nodes": [], "links": []})
+                        persons_from_extract = extract_result.get('persons')
+                        if isinstance(persons_from_extract, list) and persons_from_extract:
+                            new_case.person = json.dumps(persons_from_extract, ensure_ascii=False)
+                        new_case.graph_result = json.dumps(
+                            {
+                                "graph": graph,
+                                "raw": extract_result.get("raw", {}),
+                                "meta": extract_result.get("meta", {})
+                            },
+                            ensure_ascii=False
+                        )
                     db.session.flush()
             except Exception as analyze_error:
                 db.session.rollback()

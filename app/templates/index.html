@@ -1,117 +1,619 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>标注页面</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司法智能研判平台</title>
 </head>
 <body>
-    
-    <!-- 导航 -->
-    <a href="/">首页</a> | 
-    <a href="/annotate">标注页面</a> | 
-    <a href="/statistic">统计页面</a>| 
-    <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
-    <a href="/manage">管理页面</a> 
-    <h1>上传裁判文书</h1>
-    
-    <form action="/casesubmit" method="POST">
-    
-    内容：<textarea name="content" placeholder="请粘贴裁判文书内容..."></textarea><br>
-    判决结果：<input type="text" name="result" placeholder="请输入判决结果" class="result-input"><br>
-    预测方法：
-    <select name="predict_method" class="method-select">
-        <option value="official_step" selected>方案1：官方现成大模型（硅基流动）</option>
-        <option value="self_hosted_lawgpt">方案2：自部署微调模型（LawGPT预留）</option>
-        <option value="coze_workflow">方案3：Coze工作流+知识库（预留）</option>
-        <option value="langgraph_workflow">方案4：LangGraph多步工作流（分支路由+校验回路）</option>
-    </select><br>
-    预测提示词模板（可选）：
-    <textarea name="predict_prompt_template" class="prompt-input" placeholder="可选：自定义判决预测提示词模板。可用占位符 {case_type} 和 {content}。"></textarea><br>
-    <input type="submit" value="提交">
-</form>
-    
+    <div class="page-shell">
+        <nav class="top-nav">
+            <a href="/" class="active">首页</a>
+            <a href="/annotate{% if latest_case %}?case_id={{ latest_case.id }}{% endif %}">标注页面</a>
+            <a href="/statistic{% if latest_case %}?case_id={{ latest_case.id }}{% endif %}">统计页面</a>
+            <a href="/predict{% if latest_case %}?case_id={{ latest_case.id }}{% endif %}">判决预测页面</a>
+            <a href="/manage">管理页面</a>
+        </nav>
+
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Judicial Intelligence Console</p>
+                <h1>司法智能研判与知识图谱平台</h1>
+                <p class="subhead">首页是整个平台的统一入口。你可以先提交裁判文书，再按业务流程依次进入标注、统计、预测和管理模块完成后续操作。</p>
+            </div>
+            <div class="topbar-meta">
+                <span class="meta-chip">在线模块 5</span>
+                <span class="meta-chip">最新案件 {{ latest_case.name if latest_case else '暂无案件' }}</span>
+            </div>
+        </header>
+
+        <section class="hero-panel">
+            <div class="hero-copy">
+                <div class="hero-tag">首页驾驶舱</div>
+                <h2>从首页开始进入案件处理全流程</h2>
+                <p>建议先在本页提交裁判文书和真实判决结果，系统会自动生成案件分析、知识图谱和预测结果。提交完成后，再通过下方模块卡片进入对应页面做查看、核对和管理。</p>
+                <div class="hero-actions">
+                    <a class="primary-btn" href="#submit-panel">先去提交文书</a>
+                    <a class="secondary-btn" href="/manage">查看已有案件</a>
+                </div>
+            </div>
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <span class="stat-label">案件总数</span>
+                    <strong class="stat-value">{{ total_cases }}</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">已完成预测</span>
+                    <strong class="stat-value">{{ predicted_cases }}</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">已生成图谱</span>
+                    <strong class="stat-value">{{ graphed_cases }}</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">已录入真实结果</span>
+                    <strong class="stat-value">{{ actual_cases }}</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="module-section">
+            <div class="section-head">
+                <h3>功能导航模块</h3>
+                <p>如果你已经提交过案件，可以从这里按需要进入不同功能页面。</p>
+            </div>
+            <div class="module-grid">
+                {% for card in module_cards %}
+                    <a class="module-card accent-{{ card.accent }}" href="{{ card.href }}">
+                        <div class="module-card-top">
+                            <span class="module-tag">{{ card.tag }}</span>
+                            <span class="module-arrow">></span>
+                        </div>
+                        <div class="module-visual">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <h4>{{ card.title }}</h4>
+                        <p>{{ card.subtitle }}</p>
+                    </a>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section id="submit-panel" class="workbench">
+            <div class="section-head">
+                <h3>文书提交工作台</h3>
+                <p>首次使用建议从这里开始。提交后系统会自动创建案件，并串联后续分析、图谱和预测流程。</p>
+            </div>
+
+            <div class="workbench-grid">
+                <div class="submit-card">
+                    <form action="/casesubmit" method="POST" class="submit-form">
+                        <label for="content">裁判文书内容</label>
+                        <textarea id="content" name="content" placeholder="请先粘贴完整裁判文书正文。内容越完整，后续的案件分析、知识图谱抽取和判决预测通常越稳定。"></textarea>
+
+                        <label for="result">真实判决结果</label>
+                        <input id="result" type="text" name="result" placeholder="建议填写真实判决结果，用于后续在预测页进行模型输出与真实结果的对照分析" class="result-input">
+
+                        <label for="predict_method">预测方法</label>
+                        <select id="predict_method" name="predict_method" class="method-select">
+                            <option value="official_step" selected>方案1：官方现成大模型（DeepSeek）</option>
+                            <option value="self_hosted_lawgpt">方案2：自部署微调模型（LawGPT预留）</option>
+                            <option value="coze_workflow">方案3：Coze工作流+知识库（预留）</option>
+                            <option value="langgraph_workflow">方案4：LangGraph多步工作流（分支路由+校验回路）</option>
+                        </select>
+
+                        <label for="predict_prompt_template">预测提示词模板（可选）</label>
+                        <textarea id="predict_prompt_template" name="predict_prompt_template" class="prompt-input" placeholder="如需调整模型输出风格或补充规则，可在这里填写自定义提示词模板。可用占位符 {case_type} 和 {content}。"></textarea>
+
+                        <button type="submit" class="submit-btn">提交案件并进入后续流程</button>
+                    </form>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-panel">
+                        <span class="info-kicker">使用说明</span>
+                        <h4>提交一条案件后，建议这样使用平台</h4>
+                        <ul>
+                            <li>第 1 步：在左侧填写裁判文书内容，必要时补充真实判决结果与预测方法。</li>
+                            <li>第 2 步：提交后系统会自动完成案件基础信息分析，并生成知识图谱与预测结果。</li>
+                            <li>第 3 步：进入标注页核对摘要和关键信息，再到统计页查看图谱，最后在预测页对照真实结果。</li>
+                        </ul>
+                    </div>
+
+                    <div class="info-panel compact">
+                        <span class="info-kicker">快捷入口</span>
+                        {% if latest_case %}
+                            <h4>{{ latest_case.name }}</h4>
+                            <p>你可以从这里继续处理最近一条案件，避免重复回到首页查找入口。</p>
+                            <div class="quick-links">
+                                <a href="/annotate?case_id={{ latest_case.id }}">去标注</a>
+                                <a href="/statistic?case_id={{ latest_case.id }}">去统计</a>
+                                <a href="/predict?case_id={{ latest_case.id }}">去预测</a>
+                            </div>
+                        {% else %}
+                            <h4>暂无案件</h4>
+                            <p>提交第一条文书后，这里会自动出现最近案件的快捷入口。</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
 </body>
 </html>
 <style>
-    body {
-        background-color: #f0f8ff;
-        font-family: Arial, sans-serif;
-        margin: 20px;
-        line-height: 1.6;
+    :root {
+        --panel: #ffffff;
+        --panel-strong: #f8fbff;
+        --line: #d7e6f7;
+        --text: #2d3748;
+        --muted: #718096;
     }
-    
-    h1 {
+
+    * {
+        box-sizing: border-box;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Arial, sans-serif;
+        color: var(--text);
+        background: #f4f8fc;
+    }
+
+    .page-shell {
+        width: min(1380px, calc(100vw - 48px));
+        margin: 0 auto;
+        padding: 28px 0 56px;
+    }
+
+    .top-nav {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+
+    .top-nav a {
+        color: #2c5282;
+        text-decoration: none;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #edf6ff;
+        border: 1px solid #cfe3f8;
+    }
+
+    .top-nav a.active {
+        background: #2c5282;
+        color: white;
+        border-color: #2c5282;
+    }
+
+    .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 24px;
+        padding: 22px 28px;
+        margin-bottom: 22px;
+        background: white;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 8px 22px rgba(44, 82, 130, 0.06);
+    }
+
+    .eyebrow {
+        margin: 0 0 6px;
+        color: #3182ce;
+        font-size: 13px;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
+    }
+
+    .topbar h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.2;
         color: #2c5282;
     }
-    
-    form {
-        background-color: white;
+
+    .subhead {
+        max-width: 760px;
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+    }
+
+    .topbar-meta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .meta-chip {
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid #cfe3f8;
+        background: #edf6ff;
+        color: #2c5282;
+        font-size: 13px;
+    }
+
+    .hero-panel,
+    .module-section,
+    .workbench {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 28px;
+        box-shadow: 0 8px 22px rgba(44, 82, 130, 0.06);
+    }
+
+    .hero-panel {
+        display: grid;
+        grid-template-columns: 1.35fr 0.95fr;
+        gap: 22px;
+        margin-bottom: 22px;
+    }
+
+    .hero-tag,
+    .info-kicker {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: #3182ce;
+        border: 1px solid #bee3f8;
+        background: #ebf8ff;
+        font-size: 12px;
+        letter-spacing: 0.8px;
+    }
+
+    .hero-copy h2 {
+        margin: 16px 0 10px;
+        font-size: 32px;
+        color: #2c5282;
+    }
+
+    .hero-copy p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+    }
+
+    .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 22px;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .quick-links a,
+    .module-card {
+        text-decoration: none;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .submit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 18px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 15px;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .primary-btn,
+    .submit-btn {
+        background: #2c5282;
+        color: white;
+        box-shadow: none;
+    }
+
+    .secondary-btn {
+        background: #edf6ff;
+        color: #2c5282;
+        border-color: #cfe3f8;
+    }
+
+    .primary-btn:hover,
+    .secondary-btn:hover,
+    .submit-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+    }
+
+    .stat-card {
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px solid #d7e6f7;
+        background: #f8fbff;
+    }
+
+    .stat-label {
+        display: block;
+        color: #718096;
+        font-size: 13px;
+        margin-bottom: 12px;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        line-height: 1;
+        color: #1a365d;
+    }
+
+    .module-section {
+        margin-bottom: 22px;
+    }
+
+    .section-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 18px;
+    }
+
+    .section-head h3 {
+        margin: 0;
+        font-size: 26px;
+    }
+
+    .section-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+    }
+
+    .module-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .module-card {
+        position: relative;
+        padding: 18px;
+        min-height: 220px;
+        border-radius: 22px;
+        border: 1px solid #d7e6f7;
+        background: linear-gradient(180deg, #ffffff, #f8fbff);
+        color: var(--text);
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .module-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 24px rgba(44, 82, 130, 0.12);
+        border-color: #90cdf4;
+    }
+
+    .module-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -30% auto;
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(84, 199, 255, 0.18), transparent 70%);
+    }
+
+    .module-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .module-tag {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: #2c5282;
+        background: #edf6ff;
+        border: 1px solid #cfe3f8;
+    }
+
+    .module-arrow {
+        font-size: 22px;
+        color: #90a4c7;
+    }
+
+    .module-visual {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+
+    .module-visual span {
+        height: 82px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(77, 160, 255, 0.18), rgba(34, 70, 138, 0.05));
+        border: 1px solid rgba(100, 190, 255, 0.18);
+    }
+
+    .module-card h4 {
+        margin: 0 0 10px;
+        font-size: 22px;
+        color: #2c5282;
+    }
+
+    .module-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+        font-size: 14px;
+    }
+
+    .accent-cyan { box-shadow: inset 0 0 0 1px rgba(57, 208, 255, 0.08); }
+    .accent-blue { box-shadow: inset 0 0 0 1px rgba(74, 125, 255, 0.08); }
+    .accent-violet { box-shadow: inset 0 0 0 1px rgba(122, 125, 255, 0.08); }
+    .accent-teal { box-shadow: inset 0 0 0 1px rgba(32, 214, 181, 0.08); }
+    .accent-indigo { box-shadow: inset 0 0 0 1px rgba(88, 118, 255, 0.08); }
+
+    .workbench-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+        gap: 18px;
+    }
+
+    .submit-card,
+    .info-panel {
+        background: var(--panel-strong);
+        border: 1px solid #d7e6f7;
+        border-radius: 20px;
         padding: 20px;
-        border-radius: 8px;
-        border: 1px solid #a0c8f8;
-        max-width: 600px;
     }
-    
-    textarea {
+
+    .submit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .submit-form label {
+        color: #2c5282;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .submit-form textarea,
+    .submit-form input,
+    .submit-form select {
         width: 100%;
-        padding: 8px;
-        margin: 8px 0 16px 0;
-        border: 1px solid #a0c8f8;
-        border-radius: 4px;
-        box-sizing: border-box;
-        height: 300px;
+        color: var(--text);
+        background: #fff;
+        border: 1px solid #cbd5e0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        outline: none;
+    }
+
+    .submit-form textarea:focus,
+    .submit-form input:focus,
+    .submit-form select:focus {
+        border-color: #3182ce;
+        box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.12);
+    }
+
+    .submit-form textarea {
+        min-height: 220px;
         resize: vertical;
-    }
-    
-    .result-input {
-        width: 100%;
-        padding: 8px;
-        margin: 8px 0 16px 0;
-        border: 1px solid #a0c8f8;
-        border-radius: 4px;
-        box-sizing: border-box;
     }
 
     .prompt-input {
-        width: 100%;
-        padding: 8px;
-        margin: 8px 0 16px 0;
-        border: 1px solid #a0c8f8;
-        border-radius: 4px;
-        box-sizing: border-box;
-        min-height: 100px;
-        resize: vertical;
+        min-height: 110px;
     }
 
-    .method-select {
-        width: 100%;
-        padding: 8px;
-        margin: 8px 0 16px 0;
-        border: 1px solid #a0c8f8;
-        border-radius: 4px;
-        box-sizing: border-box;
-        background-color: white;
-    }
-    
-    input[type="submit"] {
-        background-color: #4299e1;
-        color: white;
+    .submit-btn {
+        margin-top: 6px;
         border: none;
-        padding: 10px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 16px;
     }
-    
-    input[type="submit"]:hover {
-        background-color: #3182ce;
+
+    .info-card {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
     }
-    
-    a {
-        color: #3182ce;
-        text-decoration: none;
+
+    .info-panel h4 {
+        margin: 14px 0 10px;
+        font-size: 22px;
     }
-    
-    a:hover {
-        text-decoration: underline;
+
+    .info-panel p,
+    .info-panel li {
+        color: var(--muted);
+        line-height: 1.75;
+    }
+
+    .info-panel ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+
+    .quick-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .quick-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 10px;
+        background: #edf6ff;
+        border: 1px solid #cfe3f8;
+        color: #2c5282;
+    }
+
+    .quick-links a:hover {
+        background: #e2efff;
+    }
+
+    @media (max-width: 1200px) {
+        .module-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .hero-panel,
+        .workbench-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .page-shell {
+            width: min(100vw - 24px, 1380px);
+            padding-top: 16px;
+        }
+
+        .topbar,
+        .hero-panel,
+        .module-section,
+        .workbench {
+            padding: 20px;
+            border-radius: 18px;
+        }
+
+        .topbar {
+            flex-direction: column;
+        }
+
+        .topbar h1,
+        .hero-copy h2 {
+            font-size: 26px;
+        }
+
+        .module-grid,
+        .hero-stats {
+            grid-template-columns: 1fr;
+        }
     }
 </style>

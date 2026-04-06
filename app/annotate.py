@@ -44,10 +44,16 @@ def annotate():
             case.summary if case.summary else "",
             keywords_list  
         )
+
+        graph_payload = case.get_graph_payload()
+        graph = graph_payload.get("graph", {"nodes": [], "links": []})
         
         return render_template('annotate.html', 
                              case=case, 
                              highlighted_summary=highlighted_summary,
+                             laws_list=case.get_law_list(),
+                             persons_list=case.get_persons_list(),
+                             graph_preview=graph,
                              mode='view')
     
     return render_template('annotate.html', case=None, mode='prompt')

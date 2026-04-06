@@ -20,7 +20,9 @@ class Settings:
     
     # API
     DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
-    DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+    DEEPSEEK_BASE_URL = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
+    DEEPSEEK_TIMEOUT = int(os.getenv('DEEPSEEK_TIMEOUT', '90'))
 
     # 判决预测方法配置（四种方案）
     PREDICT_METHOD_DEFAULT = os.getenv('PREDICT_METHOD_DEFAULT', 'official_step')

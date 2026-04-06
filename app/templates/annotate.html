@@ -1,119 +1,203 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>案例标注</title>
 </head>
 <body>
-    <!-- 导航 -->
-    <a href="/">首页</a> | 
-    <a href="/annotate">标注页面</a> | 
-    <a href="/statistic">统计页面</a> | 
-    <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
-    <a href="/manage">管理页面</a> 
-    
-    <h1>案例标注系统</h1>
-    
-    <hr>
-    
-    {% if mode == 'prompt' %}
-        <!-- 提示模式 -->
-        <h2>请从首页提交案件或从管理页面查看</h2>
-        <p><a href="/">返回首页提交新案件</a></p>
-        
-    {% else %}
-        <!-- 查看模式：显示案件信息 -->
-        <h2>案件详情</h2>
-        
-        {% if case %}
-            <table border="0" width="100%">
-                <tr>
-                    <!-- 左栏：基本信息和关键词 -->
-                    <td width="30%" valign="top">
-                        
-                        <h3>自动提取的关键词</h3>
-                        {% if case.get_keywords_list() %}
-                            {% for keyword in case.get_keywords_list() %}
-                                <span class="keyword-tag">{{ keyword }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <p>无关键词</p>
-                        {% endif %}
-                    </td>
-                    
-                    <!-- 右栏：摘要和原文 -->
-                    <td width="70%" valign="top">
-                        <h3>文书摘要</h3>
-                        
-                        <!-- 添加高亮切换按钮 -->
-                        <div style="margin-bottom: 10px;">
-                            <button onclick="toggleHighlight()" id="highlightBtn" style="background-color: #4299e1;">关键词</button>
-                        </div>
-                        
-                        <div id="summaryContent">
-                            {% if case.summary %}
-                                <!-- 渲染已高亮的HTML -->
-                                {{ highlighted_summary|safe }}
+    <div class="page-shell">
+        <nav class="top-nav">
+            <a href="/">首页</a>
+            <a href="/annotate{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}" class="active">标注页面</a>
+            <a href="/statistic{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">统计页面</a>
+            <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a>
+            <a href="/manage">管理页面</a>
+        </nav>
+
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">Case Annotation</p>
+                <h1>案件标注与摘要浏览</h1>
+                <p class="subtitle">统一采用与统计页一致的蓝白卡片式布局，帮助你在同一视觉体系中查看案件摘要、人员、法律与图谱预览。</p>
+            </div>
+        </header>
+
+        {% if mode == 'prompt' %}
+            <div class="card empty-state">
+                <h2>请先提交案件</h2>
+                <p>当前还没有可供标注浏览的案件，请从首页提交新案件或前往管理页面查看已有案件。</p>
+                <div class="action-row">
+                    <a class="primary-link" href="/">返回首页提交新案件</a>
+                    <a class="ghost-link" href="/manage">前往管理页面</a>
+                </div>
+            </div>
+        {% else %}
+            {% if case %}
+                <section class="card case-hero">
+                    <div>
+                        <h2>{{ case.name }}</h2>
+                        <p class="case-meta">{{ case.sort or '其他' }}</p>
+                        <p class="case-desc">该页面用于快速浏览案件摘要与基础结构信息，并通过简版知识图谱预览辅助理解案件主体关系。</p>
+                    </div>
+                    <div class="case-actions">
+                        <a class="ghost-link" href="/statistic?case_id={{ case.id }}">查看完整图谱</a>
+                        <a class="ghost-link" href="/predict?case_id={{ case.id }}">查看预测页面</a>
+                    </div>
+                </section>
+
+                <section class="annotate-layout">
+                    <aside class="sidebar">
+                        <div class="card panel">
+                            <div class="section-head">
+                                <h3>自动提取关键词</h3>
+                            </div>
+                            {% if case.get_keywords_list() %}
+                                <div class="tag-wrap">
+                                    {% for keyword in case.get_keywords_list() %}
+                                        <span class="keyword-tag">{{ keyword }}</span>
+                                    {% endfor %}
+                                </div>
                             {% else %}
-                                {{ case.content[:200] + '...' }}
+                                <p class="empty-text">无关键词</p>
                             {% endif %}
                         </div>
-                        
-                        <hr>
-                        
-                        <h3>完整文书内容</h3>
-                        <!-- 展开/收起按钮 -->
-                        <button onclick="toggleContent()">点击展开/收起完整内容</button>
-                        
-                        <!-- 内容区域 -->
-                        <div id="fullContent" style="display: none; margin-top: 10px;">
-                            {{ case.content }}
+
+                        <div class="card panel">
+                            <div class="section-head">
+                                <h3>案件结构信息</h3>
+                            </div>
+                            <div class="info-group">
+                                <h4>审理法院</h4>
+                                <p>{{ case.court or '暂无' }}</p>
+                            </div>
+
+                            <div class="info-group">
+                                <h4>相关法律</h4>
+                                {% if laws_list %}
+                                    <ul class="plain-list">
+                                    {% for law in laws_list %}
+                                        <li>{{ law }}</li>
+                                    {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <p class="empty-text">暂无</p>
+                                {% endif %}
+                            </div>
+
+                            <div class="info-group">
+                                <h4>涉案人员</h4>
+                                {% if persons_list %}
+                                    <ul class="plain-list">
+                                    {% for person in persons_list %}
+                                        <li>{% if person.role %}{{ person.role }}：{% endif %}{{ person.name }}</li>
+                                    {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <p class="empty-text">暂无</p>
+                                {% endif %}
+                            </div>
+
+                            <div class="info-group">
+                                <h4>纠纷描述</h4>
+                                <p>{{ case.incident or '暂无' }}</p>
+                            </div>
+
+                            <div class="info-group">
+                                <h4>案发地点</h4>
+                                <p>{{ case.location or '暂无' }}</p>
+                            </div>
                         </div>
-                    </td>
-                </tr>
-            </table>
-            
-            <hr>
-            <p><a href="/">提交新案件</a> | <a href="/manage">查看所有案件</a></p>
+
+                        <div class="card panel">
+                            <div class="section-head">
+                                <h3>知识图谱预览</h3>
+                                <p>节点数：{{ graph_preview.nodes|length }}，关系数：{{ graph_preview.links|length }}</p>
+                            </div>
+                            {% if graph_preview.nodes %}
+                                <div id="miniGraph" class="mini-graph"></div>
+                                <p class="graph-link"><a href="/statistic?case_id={{ case.id }}">前往统计页查看完整图谱</a></p>
+                            {% else %}
+                                <p class="empty-text">当前案件暂无知识图谱。</p>
+                            {% endif %}
+                        </div>
+                    </aside>
+
+                    <section class="content-area">
+                        <div class="card panel">
+                            <div class="section-head summary-head">
+                                <div>
+                                    <h3>文书摘要</h3>
+                                    <p>你可以切换关键词高亮状态，快速查看系统提炼的摘要内容。</p>
+                                </div>
+                                <button onclick="toggleHighlight()" id="highlightBtn" class="primary-btn">关键词高亮</button>
+                            </div>
+
+                            <div id="summaryContent" class="summary-box">
+                                {% if case.summary %}
+                                    {{ highlighted_summary|safe }}
+                                {% else %}
+                                    {{ case.content[:200] + '...' }}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="card panel">
+                            <div class="section-head summary-head">
+                                <div>
+                                    <h3>完整文书内容</h3>
+                                    <p>按需展开原始文书，避免大段文本干扰主阅读区。</p>
+                                </div>
+                                <button onclick="toggleContent()" id="contentToggleBtn" class="ghost-btn">点击展开完整内容</button>
+                            </div>
+                            <div id="fullContent" class="content-box">
+                                {{ case.content }}
+                            </div>
+                        </div>
+                    </section>
+                </section>
+            {% endif %}
         {% endif %}
-    {% endif %}
 
     <script>
-        // 高亮状态
         var highlightEnabled = true;
-        // 存储原始高亮内容和纯文本内容
         var originalSummary = '';
         var plainSummary = '';
-        
-        // 页面加载时保存原始内容
+        var miniGraphData = {{ graph_preview|tojson }};
+
         window.onload = function() {
             var summaryDiv = document.getElementById('summaryContent');
-            originalSummary = summaryDiv.innerHTML;
-            // 提取纯文本（去掉span标签）
-            plainSummary = originalSummary.replace(/<span[^>]*>|<\/span>/g, '');
+            if (summaryDiv) {
+                originalSummary = summaryDiv.innerHTML;
+                plainSummary = originalSummary.replace(/<span[^>]*>|<\/span>/g, '');
+            }
+            if (miniGraphData && miniGraphData.nodes && miniGraphData.nodes.length) {
+                loadMiniGraph();
+            }
         }
-        
+
         function toggleHighlight() {
             var summaryDiv = document.getElementById('summaryContent');
             var btn = document.getElementById('highlightBtn');
-            
+            if (!summaryDiv || !btn) return;
+
             if (highlightEnabled) {
-                // 关闭高亮：显示纯文本
                 summaryDiv.innerHTML = plainSummary;
-                btn.textContent = '关键词';
+                btn.textContent = '显示关键词高亮';
             } else {
-                // 开启高亮：恢复高亮内容
                 summaryDiv.innerHTML = originalSummary;
-                btn.textContent = '关键词';
+                btn.textContent = '关键词高亮';
             }
-            
+
             highlightEnabled = !highlightEnabled;
         }
-        
+
         function toggleContent() {
             var contentDiv = document.getElementById('fullContent');
-            var button = event.target;
-            
-            if (contentDiv.style.display === 'none') {
+            var button = document.getElementById('contentToggleBtn');
+            if (!contentDiv || !button) return;
+
+            if (contentDiv.style.display === 'none' || contentDiv.style.display === '') {
                 contentDiv.style.display = 'block';
                 button.textContent = '点击收起完整内容';
             } else {
@@ -121,58 +205,316 @@
                 button.textContent = '点击展开完整内容';
             }
         }
+
+        function loadMiniGraph() {
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+            script.onload = renderMiniGraph;
+            document.head.appendChild(script);
+        }
+
+        function renderMiniGraph() {
+            if (!window.d3) return;
+            var container = document.getElementById('miniGraph');
+            if (!container) return;
+
+            var width = container.clientWidth || 320;
+            var height = 220;
+            var graphData = {
+                nodes: (miniGraphData.nodes || []).slice(0, 18),
+                links: (miniGraphData.links || []).slice(0, 24)
+            };
+
+            var svg = d3.select('#miniGraph').append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            var color = d3.scaleOrdinal()
+                .domain(['person', 'event', 'time', 'location'])
+                .range(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']);
+
+            var simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.links).id(function(d) { return d.id; }).distance(70))
+                .force('charge', d3.forceManyBody().strength(-120))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collide', d3.forceCollide().radius(16));
+
+            var link = svg.append('g')
+                .attr('stroke', '#a0aec0')
+                .attr('stroke-opacity', 0.8)
+                .selectAll('line')
+                .data(graphData.links)
+                .enter()
+                .append('line')
+                .attr('stroke-width', 1.5);
+
+            var node = svg.append('g')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .enter()
+                .append('circle')
+                .attr('r', 7)
+                .attr('fill', function(d) { return color(d.type || 'event'); });
+
+            var label = svg.append('g')
+                .selectAll('text')
+                .data(graphData.nodes)
+                .enter()
+                .append('text')
+                .attr('font-size', 10)
+                .attr('dx', 9)
+                .attr('dy', '0.35em')
+                .text(function(d) { return d.name; });
+
+            simulation.on('tick', function() {
+                link
+                    .attr('x1', function(d) { return d.source.x; })
+                    .attr('y1', function(d) { return d.source.y; })
+                    .attr('x2', function(d) { return d.target.x; })
+                    .attr('y2', function(d) { return d.target.y; });
+
+                node
+                    .attr('cx', function(d) { return d.x; })
+                    .attr('cy', function(d) { return d.y; });
+
+                label
+                    .attr('x', function(d) { return d.x; })
+                    .attr('y', function(d) { return d.y; });
+            });
+        }
     </script>
 </body>
 </html>
 <style>
+    * {
+        box-sizing: border-box;
+    }
+
     body {
-        background-color: #f0f8ff;
+        margin: 0;
+        background: #f4f8fc;
         font-family: Arial, sans-serif;
-        margin: 20px;
+        color: #2d3748;
         line-height: 1.6;
     }
-    
-    h1, h2, h3 {
+
+    .page-shell {
+        width: min(1400px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 24px 0 40px;
+    }
+
+    .top-nav {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+
+    .top-nav a {
         color: #2c5282;
-    }
-    
-    hr {
-        border: none;
-        height: 1px;
-        background-color: #a0c8f8;
-        margin: 20px 0;
-    }
-    
-    a {
-        color: #3182ce;
         text-decoration: none;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #edf6ff;
+        border: 1px solid #cfe3f8;
     }
-    
-    a:hover {
-        text-decoration: underline;
-    }
-    
-    button {
-        background-color: #4299e1;
+
+    .top-nav a.active {
+        background: #2c5282;
         color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        cursor: pointer;
+        border-color: #2c5282;
     }
-    
-    button:hover {
-        background-color: #3182ce;
+
+    .page-header {
+        margin-bottom: 20px;
+    }
+
+    .eyebrow {
+        margin: 0 0 6px;
+        color: #3182ce;
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    h1, h2, h3, h4 {
+        color: #2c5282;
+        margin-top: 0;
+    }
+
+    .subtitle,
+    .case-meta,
+    .case-desc,
+    .section-head p,
+    .empty-text {
+        color: #718096;
+    }
+
+    .card,
+    .panel {
+        background: white;
+        border: 1px solid #d7e6f7;
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 8px 22px rgba(44, 82, 130, 0.06);
+    }
+
+    .case-hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+    }
+
+    .case-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .annotate-layout {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    .sidebar,
+    .content-area {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .section-head {
+        margin-bottom: 12px;
+    }
+
+    .summary-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+    }
+
+    .tag-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .keyword-tag {
-        display: inline-block;
-        background-color: #e3f2fd;
-        color: #0d47a1;
-        padding: 4px 12px;
-        margin: 4px;
-        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        background-color: #ebf8ff;
+        color: #2c5282;
+        padding: 6px 12px;
+        border-radius: 999px;
         font-size: 14px;
-        border: 1px solid #90caf9;
+        border: 1px solid #bee3f8;
+    }
+
+    .info-group + .info-group {
+        margin-top: 16px;
+    }
+
+    .plain-list {
+        padding-left: 18px;
+        margin: 0;
+    }
+
+    .mini-graph {
+        width: 100%;
+        min-height: 220px;
+        border: 1px solid #d9ecff;
+        border-radius: 12px;
+        background-color: #f9fcff;
+        overflow: hidden;
+    }
+
+    .summary-box,
+    .content-box {
+        background: #f8fbff;
+        border: 1px solid #d9ecff;
+        border-radius: 12px;
+        padding: 14px;
+    }
+
+    .content-box {
+        display: none;
+        white-space: pre-wrap;
+        max-height: 420px;
+        overflow-y: auto;
+    }
+
+    .primary-btn,
+    .ghost-btn,
+    .primary-link,
+    .ghost-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 10px;
+        font-size: 14px;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+    }
+
+    .primary-btn,
+    .primary-link {
+        background: #2c5282;
+        color: white;
+    }
+
+    .ghost-btn,
+    .ghost-link {
+        background: #edf6ff;
+        color: #2c5282;
+        border: 1px solid #cfe3f8;
+    }
+
+    .action-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+
+    .graph-link {
+        margin-top: 12px;
+    }
+
+    .graph-link a {
+        color: #3182ce;
+        text-decoration: none;
+    }
+
+    .graph-link a:hover,
+    .ghost-link:hover,
+    .primary-link:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 1100px) {
+        .annotate-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .case-hero,
+        .summary-head {
+            flex-direction: column;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .page-shell {
+            width: calc(100vw - 24px);
+            padding-top: 16px;
+        }
     }
 </style>

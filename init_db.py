@@ -46,14 +46,15 @@ def ensure_schema_columns():
 
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SHOW COLUMNS FROM cases LIKE 'actual_result'")
-            has_actual_result = cursor.fetchone() is not None
+            def has_column(column_name: str) -> bool:
+                cursor.execute(f"SHOW COLUMNS FROM cases LIKE '{column_name}'")
+                return cursor.fetchone() is not None
 
-            cursor.execute("SHOW COLUMNS FROM cases LIKE 'predict_method'")
-            has_predict_method = cursor.fetchone() is not None
-
-            cursor.execute("SHOW COLUMNS FROM cases LIKE 'predict_prompt_template'")
-            has_predict_prompt_template = cursor.fetchone() is not None
+            has_actual_result = has_column('actual_result')
+            has_predict_method = has_column('predict_method')
+            has_predict_prompt_template = has_column('predict_prompt_template')
+            has_court = has_column('court')
+            has_graph_result = has_column('graph_result')
 
             if not has_actual_result:
                 cursor.execute("ALTER TABLE cases ADD COLUMN actual_result TEXT NULL")
@@ -64,6 +65,18 @@ def ensure_schema_columns():
 
             if not has_predict_prompt_template:
                 cursor.execute("ALTER TABLE cases ADD COLUMN predict_prompt_template TEXT NULL")
+
+            if not has_court:
+                cursor.execute("ALTER TABLE cases ADD COLUMN court VARCHAR(50) DEFAULT ''")
+
+            if not has_graph_result:
+                cursor.execute("ALTER TABLE cases ADD COLUMN graph_result TEXT NULL")
+
+            # 旧表结构中的 law/person/incident/location 长度较短，统一放宽为兼容图谱元数据的长度。
+            cursor.execute("ALTER TABLE cases MODIFY COLUMN law TEXT")
+            cursor.execute("ALTER TABLE cases MODIFY COLUMN person TEXT")
+            cursor.execute("ALTER TABLE cases MODIFY COLUMN incident TEXT")
+            cursor.execute("ALTER TABLE cases MODIFY COLUMN location VARCHAR(200)")
 
         connection.commit()
     finally:

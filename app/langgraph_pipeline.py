@@ -131,11 +131,11 @@ def _detect_case_type(text: str, case_type_input: str) -> str:
 
 def _build_llm() -> ChatOpenAI:
     return ChatOpenAI(
-        model=settings.SILICONFLOW_MODEL,
-        api_key=settings.SILICONFLOW_API_KEY,
-        base_url=settings.SILICONFLOW_BASE_URL,
+        model=settings.DEEPSEEK_MODEL,
+        api_key=settings.DEEPSEEK_API_KEY,
+        base_url=settings.DEEPSEEK_BASE_URL,
         temperature=0.2,
-        timeout=settings.SILICONFLOW_TIMEOUT,
+        timeout=settings.DEEPSEEK_TIMEOUT,
     )
 
 

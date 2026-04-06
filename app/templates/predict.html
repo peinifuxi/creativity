@@ -1,78 +1,298 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>判决预测页面</title>
 </head>
 <body>
-    <!-- 导航 -->
-    <a href="/">首页</a> | 
-    <a href="/annotate">标注页面</a> | 
-    <a href="/statistic">统计页面</a> |
-    <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">判决预测页面</a> |  
-    <a href="/manage">管理页面</a> 
+    <div class="page-shell">
+        <nav class="top-nav">
+            <a href="/">首页</a>
+            <a href="/annotate{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">标注页面</a>
+            <a href="/statistic{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}">统计页面</a>
+            <a href="/predict{% if session.get('last_viewed_case') %}?case_id={{ session.get('last_viewed_case') }}{% endif %}" class="active">判决预测页面</a>
+            <a href="/manage">管理页面</a>
+        </nav>
 
-    <h1>判决预测页面</h1>
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">Judgement Prediction</p>
+                <h1>判决预测与单案对比</h1>
+                <p class="subtitle">本页用于查看模型对当前案件的判决预测结果，并将预测内容与数据库中已保存的真实判决结果进行逐项对照。</p>
+            </div>
+        </header>
 
-    {% if cases %}
-        {% set case = cases[0] %}
-
-        <div class="card">
-            <h3>当前案件</h3>
-            <p><strong>案件名称：</strong>{{ case.name or '未命名案件' }}</p>
-            <p><strong>案件类型：</strong>{{ case.sort or '其他' }}</p>
-            <p><strong>创建时间：</strong>{{ case.time }}</p>
-            <p><strong>预测方法：</strong>{{ case.predict_method or 'official_step' }}</p>
-        </div>
-
-        <div class="card">
-            <h3>预测状态</h3>
-            {% if case.predict_result and case.predict_result.strip() %}
-                <p><span class="status ok">已完成预测</span></p>
-            {% else %}
-                <p><span class="status pending">等待预测结果</span></p>
-                <p class="hint">提交案件后，后端完成大模型调用并写入数据库后，这里会自动展示最新结果。</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
             {% endif %}
-        </div>
+        {% endwith %}
 
-        <div class="grid">
-            <div class="card">
-                <h3>真实判决结果</h3>
-                <div class="result-box">
-                    {{ case.get_actual_result() if case.get_actual_result() else '暂无真实判决结果' }}
+        {% if cases %}
+            {% set case = cases[0] %}
+
+            <section class="card case-hero">
+                <div>
+                    <h2>{{ case.name or '未命名案件' }}</h2>
+                    <p class="case-meta">{{ case.sort or '其他' }} · {{ case.time }}</p>
+                    <p class="case-desc">当前预测方法：{{ predict_method_labels.get(case.predict_method or 'official_step', case.predict_method or 'official_step') }}</p>
+                    <p class="hint">你可以在本页完成三件事：查看当前预测结果、与真实判决逐项比对、切换模型后重新生成预测。</p>
                 </div>
-            </div>
-
-            <div class="card">
-                <h3>模型预测结果</h3>
-                <div class="result-box">
-                    {{ case.predict_result if case.predict_result else '尚未预测' }}
+                <div class="case-actions">
+                    <a class="ghost-link" href="/annotate?case_id={{ case.id }}">返回标注页</a>
+                    <a class="ghost-link" href="/statistic?case_id={{ case.id }}">查看统计页</a>
                 </div>
+            </section>
+
+            <section class="card">
+                <div class="section-head">
+                    <div>
+                        <h3>页面功能说明</h3>
+                        <p class="hint">如果你想快速理解这个页面，可以按下面的阅读顺序查看。</p>
+                    </div>
+                </div>
+                <div class="guide-grid">
+                    <div class="guide-item">
+                        <h4>1. 预测状态</h4>
+                        <p>用于查看当前案件是否已经生成预测，并支持切换不同模型重新预测，覆盖旧结果。</p>
+                    </div>
+                    <div class="guide-item">
+                        <h4>2. 结果对照</h4>
+                        <p>用于并排查看真实判决文本和模型预测文本，先从整体判断两者是否接近。</p>
+                    </div>
+                    <div class="guide-item">
+                        <h4>3. 对照总览</h4>
+                        <p>用于快速判断罪名、量刑年限、处罚程度三类核心信息是否一致，适合先做总览筛查。</p>
+                    </div>
+                    <div class="guide-item">
+                        <h4>4. 明细对比</h4>
+                        <p>用于逐项查看被告人、罪名、刑期和量刑片段的对应关系，适合定位具体偏差位置。</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="section-head">
+                    <div>
+                        <h3>预测状态</h3>
+                        {% if case.predict_result and case.predict_result.strip() %}
+                            <p class="hint">该区域用于管理预测任务。当前案件已完成预测，如需比较不同模型效果，可直接重新调用并覆盖旧结果。</p>
+                        {% else %}
+                            <p class="hint">该区域用于管理预测任务。当前案件尚未生成预测结果，提交后或重新预测后会自动更新。</p>
+                        {% endif %}
+                    </div>
+                    <span class="status {% if case.predict_result and case.predict_result.strip() %}ok{% else %}pending{% endif %}">
+                        {% if case.predict_result and case.predict_result.strip() %}已完成预测{% else %}等待预测{% endif %}
+                    </span>
+                </div>
+                <form action="/predict/retry" method="POST" class="retry-form">
+                    <input type="hidden" name="case_id" value="{{ case.id }}">
+                    <div class="form-row">
+                        <div class="field">
+                            <label for="predict_method"><strong>切换预测模型</strong></label>
+                            <p class="field-help">用于测试不同预测链路在同一案件上的输出差异，重新预测后页面会展示最新结果。</p>
+                            <select id="predict_method" name="predict_method" class="method-select">
+                                {% for value, label in predict_method_options %}
+                                    <option value="{{ value }}" {% if (case.predict_method or 'official_step') == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field action-field">
+                            <button type="submit" class="primary-btn">切换模型并重新预测</button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <section class="grid">
+                <div class="card">
+                    <h3>真实判决结果</h3>
+                    <p class="hint">该区域展示数据库中保存的真实裁判结果，作为本页全部对照分析的基准答案。</p>
+                    <div class="result-box">
+                        {{ case.get_actual_result() if case.get_actual_result() else '暂无真实判决结果' }}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>模型预测结果</h3>
+                    <p class="hint">该区域展示当前模型生成的预测结果，可与左侧真实判决文本进行直接通读对照。</p>
+                    <div class="result-box">
+                        {{ case.predict_result if case.predict_result else '尚未预测' }}
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h3>预测与真实对照总览</h3>
+                {% if prediction_detail %}
+                    <p class="hint">该区域用于做快速筛查。你可以先看三张摘要卡，迅速判断本案在罪名、量刑年限和处罚轻重上是否存在明显偏差。</p>
+                    <div class="compare-summary-grid">
+                        <div class="compare-card">
+                            <div class="compare-card-head">
+                                <h4>判决罪名</h4>
+                                <span class="compare-badge {% if not prediction_detail.charge.missing and not prediction_detail.charge.extra %}badge-good{% elif prediction_detail.charge.matched %}badge-warn{% else %}badge-bad{% endif %}">
+                                    {% if not prediction_detail.charge.missing and not prediction_detail.charge.extra %}
+                                        基本一致
+                                    {% elif prediction_detail.charge.matched %}
+                                        部分命中
+                                    {% else %}
+                                        差异较大
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <p><strong>真实：</strong>{{ prediction_detail.charge.actual | join('、') if prediction_detail.charge.actual else '未识别' }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.charge.predicted | join('、') if prediction_detail.charge.predicted else '未识别' }}</p>
+                            <p><strong>命中：</strong>{{ prediction_detail.charge.matched | join('、') if prediction_detail.charge.matched else '无' }}</p>
+                            <p><strong>漏判：</strong>{{ prediction_detail.charge.missing | join('、') if prediction_detail.charge.missing else '无' }}</p>
+                            <p><strong>多判：</strong>{{ prediction_detail.charge.extra | join('、') if prediction_detail.charge.extra else '无' }}</p>
+                        </div>
+                        <div class="compare-card">
+                            <div class="compare-card-head">
+                                <h4>判决年限</h4>
+                                <span class="compare-badge {% if prediction_detail.term.average_score is not none and prediction_detail.term.average_score >= 80 %}badge-good{% elif prediction_detail.term.average_score is not none and prediction_detail.term.average_score >= 40 %}badge-warn{% else %}badge-bad{% endif %}">
+                                    {% if prediction_detail.term.average_score is not none and prediction_detail.term.average_score >= 80 %}
+                                        偏差较小
+                                    {% elif prediction_detail.term.average_score is not none and prediction_detail.term.average_score >= 40 %}
+                                        需要复核
+                                    {% else %}
+                                        偏差明显
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <p><strong>真实：</strong>{{ prediction_detail.term.actual_display }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.term.predicted_display }}</p>
+                            <p><strong>真实量刑项：</strong>{{ prediction_detail.term.actual_event_count }}</p>
+                            <p><strong>预测量刑项：</strong>{{ prediction_detail.term.predicted_event_count }}</p>
+                            <p><strong>逐条平均分：</strong>{{ prediction_detail.term.average_score if prediction_detail.term.average_score is not none else '无法计算' }}</p>
+                        </div>
+                        <div class="compare-card">
+                            <div class="compare-card-head">
+                                <h4>处罚程度</h4>
+                                <span class="compare-badge {% if prediction_detail.severity.level_gap == 0 %}badge-good{% elif prediction_detail.severity.level_gap is not none and prediction_detail.severity.level_gap <= 1 %}badge-warn{% else %}badge-bad{% endif %}">
+                                    {% if prediction_detail.severity.level_gap == 0 %}
+                                        等级一致
+                                    {% elif prediction_detail.severity.level_gap is not none and prediction_detail.severity.level_gap <= 1 %}
+                                        接近真实
+                                    {% else %}
+                                        等级偏差
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <p><strong>真实：</strong>{{ prediction_detail.severity.actual_label }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.severity.predicted_label }}</p>
+                            <p><strong>等级差：</strong>{% if prediction_detail.severity.level_gap is not none %}{{ prediction_detail.severity.level_gap }}{% else %}无法比较{% endif %}</p>
+                            <p><strong>说明：</strong>该项用于判断整体处罚轻重是否与真实判罚接近。</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="hint">当前案件缺少真实判决结果或预测结果，暂时无法展示对照总览。</p>
+                {% endif %}
+            </section>
+
+            <section class="card">
+                <h3>单案明细对比</h3>
+                {% if prediction_detail %}
+                    <p class="hint">该区域用于深入复核。上面的总览只能告诉你“哪里有差异”，这里会进一步告诉你“差异出现在谁、哪一项罪名、哪一段量刑描述上”。</p>
+                    <div class="detail-grid">
+                        <div class="detail-block">
+                            <h4>判决罪名</h4>
+                            <p class="hint">用于查看真实罪名与预测罪名的集合关系，重点识别漏判和多判。</p>
+                            <p><strong>真实：</strong>{{ prediction_detail.charge.actual | join('、') if prediction_detail.charge.actual else '未识别' }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.charge.predicted | join('、') if prediction_detail.charge.predicted else '未识别' }}</p>
+                            <p><strong>命中：</strong>{{ prediction_detail.charge.matched | join('、') if prediction_detail.charge.matched else '无' }}</p>
+                            <p><strong>漏判：</strong>{{ prediction_detail.charge.missing | join('、') if prediction_detail.charge.missing else '无' }}</p>
+                            <p><strong>多判：</strong>{{ prediction_detail.charge.extra | join('、') if prediction_detail.charge.extra else '无' }}</p>
+                        </div>
+                        <div class="detail-block">
+                            <h4>判决年限</h4>
+                            <p class="hint">用于统计本案被解析出的结构化量刑项数量，并给出逐条比对后的平均结果。</p>
+                            <p><strong>真实：</strong>{{ prediction_detail.term.actual_display }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.term.predicted_display }}</p>
+                            <p><strong>真实事件数：</strong>{{ prediction_detail.term.actual_event_count }}</p>
+                            <p><strong>预测事件数：</strong>{{ prediction_detail.term.predicted_event_count }}</p>
+                            <p><strong>逐条平均分：</strong>{{ prediction_detail.term.average_score if prediction_detail.term.average_score is not none else '无法计算' }}</p>
+                            <p><strong>评分规则：</strong>{{ prediction_detail.term.score_rule }}</p>
+                        </div>
+                        <div class="detail-block">
+                            <h4>处罚程度</h4>
+                            <p class="hint">用于从整体轻重层级上判断预测是否接近真实裁判结果。</p>
+                            <p><strong>真实：</strong>{{ prediction_detail.severity.actual_label }}</p>
+                            <p><strong>预测：</strong>{{ prediction_detail.severity.predicted_label }}</p>
+                            <p><strong>等级差：</strong>{% if prediction_detail.severity.level_gap is not none %}{{ prediction_detail.severity.level_gap }}{% else %}无法比较{% endif %}</p>
+                        </div>
+                    </div>
+                    <div class="term-compare-wrap">
+                        <h4>结构化量刑项对比</h4>
+                        <p class="hint">该表用于逐条比对量刑片段。系统会尝试按“被告人 + 量刑类型 + 罪名”对齐真实结果与预测结果，帮助你定位具体哪一条量刑出现偏差。</p>
+                        {% if prediction_detail.term.comparison_rows %}
+                            {% for row in prediction_detail.term.comparison_rows %}
+                                <div class="term-compare-row">
+                                    <div class="term-col">
+                                        <div class="term-col-title">真实判罚</div>
+                                        {% if row.actual %}
+                                            <p><strong>类型：</strong>{{ row.actual.category_label }}</p>
+                                            <p><strong>被告人：</strong>{{ row.actual.person or '未识别' }}</p>
+                                            <p><strong>罪名：</strong>{{ row.actual.charge or '不适用' }}</p>
+                                            <p><strong>刑期：</strong>{{ row.actual.display }}</p>
+                                            <p><strong>片段：</strong>{{ row.actual.text }}</p>
+                                        {% else %}
+                                            <p>无对应真实事件</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="term-center">
+                                        <div class="term-slot">{{ row.slot_label }}</div>
+                                        <div class="term-score">{{ row.score if row.score is not none else 0 }}分</div>
+                                        <div class="term-gap">{% if row.month_gap is not none %}相差 {{ row.month_gap }} 个月{% else %}无法按月比较{% endif %}</div>
+                                    </div>
+                                    <div class="term-col">
+                                        <div class="term-col-title">预测判罚</div>
+                                        {% if row.predicted %}
+                                            <p><strong>类型：</strong>{{ row.predicted.category_label }}</p>
+                                            <p><strong>被告人：</strong>{{ row.predicted.person or '未识别' }}</p>
+                                            <p><strong>罪名：</strong>{{ row.predicted.charge or '不适用' }}</p>
+                                            <p><strong>刑期：</strong>{{ row.predicted.display }}</p>
+                                            <p><strong>片段：</strong>{{ row.predicted.text }}</p>
+                                        {% else %}
+                                            <p>无对应预测事件</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="hint">未从真实结果或预测结果中解析出可比较的刑期事件。</p>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <p class="hint">当前案件缺少真实判决结果或预测结果，暂时无法展示单案明细对比。</p>
+                {% endif %}
+            </section>
+
+            <section class="card">
+                <div class="section-head">
+                    <div>
+                        <h3>文书内容（用于预测）</h3>
+                        <p class="hint">该区域用于回看原始案件文书，方便结合上面的预测结果和对照结论，核实模型为什么会出现当前输出。</p>
+                    </div>
+                    <button onclick="toggleContent()" id="toggleBtn" class="ghost-btn">点击展开完整文书内容</button>
+                </div>
+                <div id="fullContent" class="content-box">
+                    {{ case.content if case.content else '暂无文书内容' }}
+                </div>
+            </section>
+
+        {% else %}
+            <div class="card empty-state">
+                <h3>还没有可预测的案件</h3>
+                <p>请先在首页提交裁判文书，系统会保存到数据库并执行预测流程。</p>
+                <p><a href="/">返回首页提交案件</a></p>
             </div>
-        </div>
-
-        <div class="card">
-            <h3>提示词预留区（后续可调）</h3>
-            <textarea readonly>{{ case.predict_prompt_template if case.predict_prompt_template else '当前案件尚未记录提示词模板。请从首页重新提交并预测。' }}</textarea>
-            <p class="hint">此处展示的是本次预测实际使用的提示词模板。</p>
-        </div>
-
-        <div class="card">
-            <h3>文书内容（用于预测）</h3>
-            <button onclick="toggleContent()" id="toggleBtn">点击展开完整文书内容</button>
-            <div id="fullContent" class="content-box">
-                {{ case.content if case.content else '暂无文书内容' }}
-            </div>
-        </div>
-
-    {% else %}
-        <div class="card">
-            <h3>还没有可预测的案件</h3>
-            <p>请先在首页提交裁判文书，系统会保存到数据库并执行预测流程。</p>
-            <p><a href="/">返回首页提交案件</a></p>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 
     <script>
         function toggleContent() {
@@ -92,37 +312,113 @@
 </body>
 </html>
 <style>
+    * {
+        box-sizing: border-box;
+    }
+
     body {
-        background-color: #f0f8ff;
+        margin: 0;
+        background: #f4f8fc;
         font-family: Arial, sans-serif;
-        margin: 20px;
+        color: #2d3748;
         line-height: 1.6;
     }
-    
-    h1, h3 {
+
+    .page-shell {
+        width: min(1400px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 24px 0 40px;
+    }
+
+    .top-nav {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+
+    .top-nav a {
         color: #2c5282;
+        text-decoration: none;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #edf6ff;
+        border: 1px solid #cfe3f8;
+    }
+
+    .top-nav a.active {
+        background: #2c5282;
+        color: white;
+        border-color: #2c5282;
+    }
+
+    .page-header {
+        margin-bottom: 20px;
+    }
+
+    .eyebrow {
+        margin: 0 0 6px;
+        color: #3182ce;
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    h1, h2, h3, h4 {
+        color: #2c5282;
+        margin-top: 0;
+    }
+
+    .subtitle,
+    .case-meta,
+    .case-desc,
+    .hint {
+        color: #718096;
     }
 
     .card {
-        background-color: white;
-        border: 1px solid #a0c8f8;
-        border-radius: 8px;
+        background: white;
+        border: 1px solid #d7e6f7;
+        border-radius: 16px;
         padding: 18px;
-        margin: 16px 0;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 22px rgba(44, 82, 130, 0.06);
+    }
+
+    .case-hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    .case-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 12px;
     }
 
     .grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        gap: 18px;
+        margin-bottom: 18px;
     }
 
     .result-box {
-        min-height: 80px;
+        min-height: 120px;
         background-color: #f8fbff;
         border: 1px solid #d9ecff;
-        border-radius: 6px;
-        padding: 10px;
+        border-radius: 12px;
+        padding: 12px;
         white-space: pre-wrap;
     }
 
@@ -146,15 +442,30 @@
         border: 1px solid #ffe4a3;
     }
 
-    textarea {
-        width: 100%;
-        min-height: 140px;
-        border: 1px solid #a0c8f8;
-        border-radius: 6px;
-        padding: 10px;
-        box-sizing: border-box;
-        resize: vertical;
-        background-color: #f9fcff;
+    .flash {
+        padding: 12px 14px;
+        border-radius: 12px;
+        margin: 0 0 18px 0;
+        border: 1px solid transparent;
+        background-color: white;
+    }
+
+    .flash-success {
+        background-color: #e6ffed;
+        color: #1f7a3b;
+        border-color: #b7efca;
+    }
+
+    .flash-warning {
+        background-color: #fff8e6;
+        color: #8a6700;
+        border-color: #ffe4a3;
+    }
+
+    .flash-error {
+        background-color: #fff5f5;
+        color: #c53030;
+        border-color: #feb2b2;
     }
 
     .content-box {
@@ -162,58 +473,275 @@
         margin-top: 10px;
         background-color: #f9fcff;
         border: 1px solid #d9ecff;
-        border-radius: 6px;
-        padding: 10px;
+        border-radius: 12px;
+        padding: 12px;
         white-space: pre-wrap;
         max-height: 360px;
         overflow-y: auto;
     }
 
-    button {
-        background-color: #4299e1;
-        color: white;
-        border: none;
-        padding: 8px 14px;
-        border-radius: 4px;
-        cursor: pointer;
+    .retry-form {
+        margin-top: 12px;
     }
 
-    button:hover {
-        background-color: #3182ce;
+    .form-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: end;
     }
 
-    .hint {
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .field-help {
+        margin: 0;
+        color: #718096;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+
+    .action-field {
+        justify-content: flex-end;
+    }
+
+    .method-select {
+        display: block;
+        width: 100%;
+        min-width: 320px;
+        padding: 10px 12px;
+        border: 1px solid #a0c8f8;
+        border-radius: 10px;
+        background-color: white;
+        box-sizing: border-box;
+    }
+
+    .compare-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+        margin-top: 12px;
+    }
+
+    .guide-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+
+    .guide-item {
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid #d9ecff;
+        background: #f8fbff;
+    }
+
+    .guide-item h4 {
+        margin-bottom: 8px;
+    }
+
+    .guide-item p {
+        margin: 0;
         color: #4a5568;
-        font-size: 14px;
+    }
+
+    .compare-card {
+        padding: 14px;
+        border: 1px solid #d9ecff;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+
+    .compare-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .compare-card-head h4 {
+        margin-bottom: 0;
+    }
+
+    .compare-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .badge-good {
+        background: #e6ffed;
+        color: #1f7a3b;
+        border: 1px solid #b7efca;
+    }
+
+    .badge-warn {
+        background: #fff8e6;
+        color: #8a6700;
+        border: 1px solid #ffe4a3;
+    }
+
+    .badge-bad {
+        background: #fff5f5;
+        color: #c53030;
+        border: 1px solid #feb2b2;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
         margin-top: 8px;
     }
-    
-    div[style*="border: 1px solid #ccc"] {
-        background-color: white;
-        border: 1px solid #a0c8f8 !important;
-        border-radius: 8px;
-        padding: 20px;
+
+    .detail-block {
+        padding: 14px;
+        border: 1px solid #d9ecff;
+        border-radius: 12px;
+        background-color: #f8fbff;
     }
-    
-    span[style*="background: #f0f0f0"] {
-        background-color: #ebf8ff !important;
-        border: 1px solid #bee3f8;
+
+    .detail-block h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
         color: #2c5282;
-        display: inline-block;
-        margin: 4px;
-        border-radius: 4px;
     }
-    
-    p {
+
+    .term-compare-wrap {
+        margin-top: 16px;
+        padding-top: 8px;
+    }
+
+    .term-compare-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 140px minmax(0, 1fr);
+        gap: 12px;
+        align-items: stretch;
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid #d9ecff;
+        border-radius: 12px;
+        background-color: #fcfeff;
+    }
+
+    .term-col {
+        padding: 12px;
+        border-radius: 12px;
+        background-color: #f8fbff;
+        border: 1px solid #d9ecff;
+    }
+
+    .term-col-title {
+        font-weight: 700;
+        color: #2c5282;
+        margin-bottom: 8px;
+    }
+
+    .term-center {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        gap: 8px;
+    }
+
+    .term-score {
+        font-size: 22px;
+        font-weight: 700;
+        color: #2c5282;
+    }
+
+    .term-slot {
+        font-size: 13px;
+        font-weight: 700;
+        color: #4a5568;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background-color: #edf2f7;
+    }
+
+    .term-gap {
+        font-size: 13px;
         color: #4a5568;
     }
-    
+
+    @media (max-width: 900px) {
+        .term-compare-row {
+            grid-template-columns: 1fr;
+        }
+
+        .term-center {
+            padding: 8px 0;
+        }
+    }
+
+    .primary-btn,
+    .ghost-btn,
+    .ghost-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 10px;
+        font-size: 14px;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+    }
+
+    .primary-btn {
+        background: #2c5282;
+        color: white;
+    }
+
+    .ghost-btn,
+    .ghost-link {
+        background: #edf6ff;
+        color: #2c5282;
+        border: 1px solid #cfe3f8;
+    }
+
     a {
         color: #3182ce;
         text-decoration: none;
     }
-    
+
     a:hover {
         text-decoration: underline;
+    }
+
+    .empty-state {
+        text-align: center;
+    }
+
+    @media (max-width: 1000px) {
+        .grid,
+        .form-row,
+        .term-compare-row {
+            grid-template-columns: 1fr;
+        }
+
+        .case-hero,
+        .section-head {
+            flex-direction: column;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .page-shell {
+            width: calc(100vw - 24px);
+            padding-top: 16px;
+        }
     }
 </style>
